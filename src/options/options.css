@@ -877,8 +877,10 @@ select.input {
   gap: 8px;
 }
 
-.date-picker-row select {
+.date-picker-row select,
+.date-picker-row input[type="date"] {
   flex: 1;
+  min-width: 0;
 }
 
 .input-sm {
@@ -891,7 +893,8 @@ select.input {
   position: relative;
 }
 
-.date-missing .date-picker-row select {
+.date-missing .date-picker-row select,
+.date-missing .date-picker-row input[type="date"] {
   border-color: #fbbf24;
   background: #fffbeb;
 }

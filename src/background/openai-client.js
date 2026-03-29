@@ -54,52 +54,6 @@ export async function testApiKey(apiConfig) {
   }
 }
 
-const CURRENCY_FACTOR_SYSTEM = `You output only valid JSON. The user will name a target ISO 4217 currency code.
-Respond with how many units of that currency equal 1.00 USD at roughly current market rates.
-Schema: {"usdToCurrency": <positive number>, "currencyCode": "<uppercase ISO code>", "brief": "<one short sentence>"}
-Example for EUR: {"usdToCurrency":0.92,"currencyCode":"EUR","brief":"approximate spot rate"}`;
-
-/**
- * Uses OpenAI to estimate USD → target currency (for UI pricing display only).
- */
-export async function fetchUsdToCurrencyFactor(currencyCode, apiConfig) {
-  const code = String(currencyCode || "USD").trim().toUpperCase();
-  if (code === "USD") {
-    const raw = JSON.stringify({
-      usdToCurrency: 1,
-      currencyCode: "USD",
-      brief: "identity",
-    });
-    return { factor: 1, rawContent: raw };
-  }
-
-  const response = await callOpenAI(
-    [
-      { role: "system", content: CURRENCY_FACTOR_SYSTEM },
-      {
-        role: "user",
-        content: `Target currency code: ${code}. Return only the JSON object with usdToCurrency = units of ${code} per 1 USD.`,
-      },
-    ],
-    { ...apiConfig, maxTokens: 200, temperature: 0.2 },
-    { response_format: { type: "json_object" } },
-  );
-
-  let parsed;
-  try {
-    parsed = JSON.parse(response.content);
-  } catch {
-    throw new OpenAIError("Could not parse currency response", "INVALID_CURRENCY_RESPONSE");
-  }
-
-  const factor = Number(parsed.usdToCurrency);
-  if (!Number.isFinite(factor) || factor <= 0) {
-    throw new OpenAIError("Invalid usdToCurrency in model response", "INVALID_CURRENCY_RESPONSE");
-  }
-
-  return { factor, rawContent: response.content };
-}
-
 async function callOpenAI(messages, apiConfig, extraBody = {}) {
   const { apiKey, model, baseUrl, maxTokens, temperature } = apiConfig;
 

@@ -63,6 +63,8 @@ Return a JSON object. Use the structure below as a GUIDE, but you MUST also:
       "title": "",
       "company": "",
       "location": "",
+      "startDate": "",
+      "endDate": "",
       "startMonth": "",
       "startYear": "",
       "endMonth": "",
@@ -122,7 +124,7 @@ Rules:
 2. Skills categories should match what the resume uses (e.g. if resume says "Languages" and "Frameworks" use those; if it says "Technical Skills" and "Soft Skills", use those)
 3. For years of experience, calculate from earliest job start to now
 4. Keep highlight bullets concise (1 line each, max 4 per role)
-8. For experience dates: use "startMonth" (e.g. "April"), "startYear" (e.g. "2025"), "endMonth", "endYear". If current job, set isCurrentCompany: true, endMonth: "", endYear: ""
+8. For experience dates: prefer "startDate" and "endDate" as ISO strings YYYY-MM-DD when a specific day is known; otherwise use "startMonth" (e.g. "April"), "startYear" (e.g. "2025"), "endMonth", "endYear". If current job, set isCurrentCompany: true, endDate: "", endMonth: "", endYear: ""
 9. For internships: also use startMonth/startYear/endMonth/endYear if dates are available, otherwise use "duration"
 5. "additionalSections" captures anything that doesn't fit the standard fields (awards, publications, volunteer work, hobbies, references, patents, speaking engagements, etc.)
 6. If certifications have issuer/year info, include it. If they're just names, put name only

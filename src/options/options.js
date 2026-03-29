@@ -1,13 +1,13 @@
 import { MSG, SUPPORTED_MODELS, DEFAULT_API_CONFIG } from "../shared/constants.js";
 import { formatUsdInPreferenceCurrency } from "../shared/currency-format.js";
-import { formatDate } from "../shared/utils.js";
+import {
+  formatDate,
+  PROFILE_MONTH_NAMES as MONTHS,
+  monthYearToIsoDate,
+  isoDateToMonthYear,
+} from "../shared/utils.js";
 
 // ─── Constants ──────────────────────────────────────────────────
-
-const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-
-const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: CURRENT_YEAR - 1989 }, (_, i) => String(CURRENT_YEAR - i));
 
 const COMMON_QUESTIONS = [
   { key: "disability", label: "Do you have a disability?", placeholder: "Yes / No / Prefer not to say" },
@@ -392,46 +392,47 @@ function showJSONPreview(data) {
 
 // ─── Profile ────────────────────────────────────────────────────
 
-function monthOptions(selected) {
-  const sel = (selected || "").trim().toLowerCase();
-  let html = '<option value="">Month</option>';
-  for (let i = 0; i < MONTHS.length; i++) {
-    const m = MONTHS[i];
-    const match = sel && (
-      m.toLowerCase() === sel ||
-      m.toLowerCase().startsWith(sel.slice(0, 3)) ||
-      sel === String(i + 1) ||
-      sel === String(i + 1).padStart(2, "0")
-    );
-    html += `<option value="${m}"${match ? " selected" : ""}>${m}</option>`;
-  }
-  return html;
-}
-
-function yearOptions(selected) {
-  const sel = (selected || "").trim();
-  let html = '<option value="">Year</option>';
-  for (const y of YEARS) {
-    html += `<option value="${y}"${y === sel ? " selected" : ""}>${y}</option>`;
-  }
-  return html;
-}
-
 function normalizeExpDates(entries) {
   for (const exp of entries) {
-    if (exp.startDate && !exp.startMonth) {
+    const s = String(exp.startDate || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const p = isoDateToMonthYear(s);
+      if (!exp.startMonth) exp.startMonth = p.month;
+      if (!exp.startYear) exp.startYear = p.year;
+    } else if (exp.startDate && (!exp.startMonth || !exp.startYear)) {
       const parts = parseClientDate(exp.startDate);
-      exp.startMonth = parts.month;
-      exp.startYear = parts.year;
+      if (!exp.startMonth) exp.startMonth = parts.month;
+      if (!exp.startYear) exp.startYear = parts.year;
     }
-    if (exp.endDate && !exp.endMonth && !exp.isCurrentCompany) {
-      const lower = (exp.endDate || "").toLowerCase().trim();
-      if (lower === "current" || lower === "present") {
-        exp.isCurrentCompany = true;
-      } else {
-        const parts = parseClientDate(exp.endDate);
-        exp.endMonth = parts.month;
-        exp.endYear = parts.year;
+    if (exp.startMonth && exp.startYear && !/^\d{4}-\d{2}-\d{2}$/.test(String(exp.startDate || "").trim())) {
+      exp.startDate = monthYearToIsoDate(exp.startMonth, exp.startYear);
+    }
+
+    if (exp.isCurrentCompany) {
+      exp.endDate = "";
+      exp.endMonth = "";
+      exp.endYear = "";
+    } else {
+      const e = String(exp.endDate || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(e)) {
+        const p = isoDateToMonthYear(e);
+        if (!exp.endMonth) exp.endMonth = p.month;
+        if (!exp.endYear) exp.endYear = p.year;
+      } else if (exp.endDate && (!exp.endMonth || !exp.endYear)) {
+        const lower = (exp.endDate || "").toLowerCase().trim();
+        if (lower === "current" || lower === "present") {
+          exp.isCurrentCompany = true;
+          exp.endDate = "";
+          exp.endMonth = "";
+          exp.endYear = "";
+        } else {
+          const parts = parseClientDate(exp.endDate);
+          exp.endMonth = parts.month;
+          exp.endYear = parts.year;
+        }
+      }
+      if (exp.endMonth && exp.endYear && !/^\d{4}-\d{2}-\d{2}$/.test(String(exp.endDate || ""))) {
+        exp.endDate = monthYearToIsoDate(exp.endMonth, exp.endYear);
       }
     }
   }
@@ -447,6 +448,18 @@ function parseClientDate(str) {
     if (str.toLowerCase().includes(m.toLowerCase().slice(0, 3))) { month = m; break; }
   }
   return { month, year };
+}
+
+function formatDateInputValue(exp, which) {
+  if (which === "start") {
+    const raw = exp.startDate;
+    if (raw && /^\d{4}-\d{2}-\d{2}$/.test(String(raw).trim())) return String(raw).trim();
+    return monthYearToIsoDate(exp.startMonth, exp.startYear) || "";
+  }
+  if (exp.isCurrentCompany) return "";
+  const raw = exp.endDate;
+  if (raw && /^\d{4}-\d{2}-\d{2}$/.test(String(raw).trim())) return String(raw).trim();
+  return monthYearToIsoDate(exp.endMonth, exp.endYear) || "";
 }
 
 async function loadProfile() {
@@ -498,8 +511,10 @@ function renderEditableExperience(experience) {
   const container = document.getElementById("experience-list");
   if (!experience.length) { container.innerHTML = '<p class="empty-state-sm">No experience data. Save your resume or click + Add.</p>'; return; }
   container.innerHTML = experience.map((exp, i) => {
-    const startMissing = !exp.startMonth && !exp.startYear;
-    const endMissing = !exp.isCurrentCompany && !exp.endMonth && !exp.endYear;
+    const startDateVal = formatDateInputValue(exp, "start");
+    const endDateVal = formatDateInputValue(exp, "end");
+    const startMissing = !startDateVal;
+    const endMissing = !exp.isCurrentCompany && !endDateVal;
     return `
     <div class="editable-card" data-section="experience" data-idx="${i}">
       <div class="editable-card-header">
@@ -517,17 +532,15 @@ function renderEditableExperience(experience) {
       </div>
       <div class="form-row">
         <div class="form-group${startMissing ? " date-missing" : ""}">
-          <label>Start Date${startMissing ? ' <span class="missing-label">Missing</span>' : ""}</label>
+          <label>Start date${startMissing ? ' <span class="missing-label">Missing</span>' : ""}</label>
           <div class="date-picker-row">
-            <select class="input input-sm ed-start-month">${monthOptions(exp.startMonth)}</select>
-            <select class="input input-sm ed-start-year">${yearOptions(exp.startYear)}</select>
+            <input type="date" class="input input-sm ed-start-date" value="${escAttr(startDateVal)}" />
           </div>
         </div>
         <div class="form-group${endMissing ? " date-missing" : ""}">
-          <label>End Date${endMissing ? ' <span class="missing-label">Missing</span>' : ""}</label>
+          <label>End date${endMissing ? ' <span class="missing-label">Missing</span>' : ""}</label>
           <div class="date-picker-row">
-            <select class="input input-sm ed-end-month"${exp.isCurrentCompany ? " disabled" : ""}>${monthOptions(exp.endMonth)}</select>
-            <select class="input input-sm ed-end-year"${exp.isCurrentCompany ? " disabled" : ""}>${yearOptions(exp.endYear)}</select>
+            <input type="date" class="input input-sm ed-end-date"${exp.isCurrentCompany ? " disabled" : ""} value="${escAttr(endDateVal)}" />
           </div>
         </div>
       </div>
@@ -724,10 +737,11 @@ function bindCardEvents(container, section) {
   container.querySelectorAll(".ed-is-current").forEach((cb) => {
     cb.addEventListener("change", () => {
       const card = cb.closest(".editable-card");
-      const endMonth = card.querySelector(".ed-end-month");
-      const endYear = card.querySelector(".ed-end-year");
-      if (endMonth) endMonth.disabled = cb.checked;
-      if (endYear) endYear.disabled = cb.checked;
+      const endDate = card.querySelector(".ed-end-date");
+      if (endDate) {
+        endDate.disabled = cb.checked;
+        if (cb.checked) endDate.value = "";
+      }
     });
   });
 }
@@ -747,7 +761,20 @@ function addItem(section) {
   if (!Array.isArray(currentProfileData[key])) currentProfileData[key] = [];
 
   const templates = {
-    experience: { title: "", company: "", location: "", startMonth: "", startYear: "", endMonth: "", endYear: "", isCurrentCompany: false, industry: "", highlights: [] },
+    experience: {
+      title: "",
+      company: "",
+      location: "",
+      startDate: "",
+      endDate: "",
+      startMonth: "",
+      startYear: "",
+      endMonth: "",
+      endYear: "",
+      isCurrentCompany: false,
+      industry: "",
+      highlights: [],
+    },
     education: { degree: "", field: "", institution: "", year: "", location: "", gpa: "" },
     projects: { name: "", description: "", techStack: [], url: "" },
     certifications: { name: "", issuer: "", year: "" },
@@ -783,18 +810,27 @@ function reRenderSection(section) {
 // ─── Collect Profile Data from Editable Cards ───────────────────
 
 function collectExperience() {
-  return [...document.querySelectorAll('#experience-list .editable-card')].map((card) => ({
-    title: card.querySelector(".ed-title")?.value.trim() || "",
-    company: card.querySelector(".ed-company")?.value.trim() || "",
-    location: card.querySelector(".ed-location")?.value.trim() || "",
-    industry: card.querySelector(".ed-industry")?.value.trim() || "",
-    startMonth: card.querySelector(".ed-start-month")?.value || "",
-    startYear: card.querySelector(".ed-start-year")?.value || "",
-    endMonth: card.querySelector(".ed-end-month")?.value || "",
-    endYear: card.querySelector(".ed-end-year")?.value || "",
-    isCurrentCompany: card.querySelector(".ed-is-current")?.checked || false,
-    highlights: (card.querySelector(".ed-highlights")?.value || "").split("\n").map((s) => s.trim()).filter(Boolean),
-  }));
+  return [...document.querySelectorAll('#experience-list .editable-card')].map((card) => {
+    const isCurrentCompany = card.querySelector(".ed-is-current")?.checked || false;
+    const startDate = card.querySelector(".ed-start-date")?.value || "";
+    const endDate = isCurrentCompany ? "" : (card.querySelector(".ed-end-date")?.value || "");
+    const startParts = isoDateToMonthYear(startDate);
+    const endParts = isoDateToMonthYear(endDate);
+    return {
+      title: card.querySelector(".ed-title")?.value.trim() || "",
+      company: card.querySelector(".ed-company")?.value.trim() || "",
+      location: card.querySelector(".ed-location")?.value.trim() || "",
+      industry: card.querySelector(".ed-industry")?.value.trim() || "",
+      startDate,
+      endDate,
+      startMonth: startParts.month,
+      startYear: startParts.year,
+      endMonth: endParts.month,
+      endYear: endParts.year,
+      isCurrentCompany,
+      highlights: (card.querySelector(".ed-highlights")?.value || "").split("\n").map((s) => s.trim()).filter(Boolean),
+    };
+  });
 }
 
 function collectEducation() {
@@ -971,7 +1007,7 @@ async function onPreferenceCurrencyChange() {
   const resp = await sendMsg(MSG.FETCH_CURRENCY_FACTOR, { currencyCode: newCurrency });
   if (!resp.success) {
     document.getElementById("pref-currency").value = lastCommittedCurrency;
-    showStatus("prefs-status", resp.error || "Could not fetch exchange rate. Check your API key.", "error");
+    showStatus("prefs-status", resp.error || "Could not fetch exchange rate. Check your network.", "error");
     return;
   }
 

@@ -1,6 +1,11 @@
 import { MSG } from "../shared/constants.js";
-import { hashContent } from "../shared/utils.js";
-import { analyzeJob, parseResume, testApiKey, fetchUsdToCurrencyFactor } from "./openai-client.js";
+import { hashContent, monthYearToIsoDate } from "../shared/utils.js";
+import { analyzeJob, parseResume, testApiKey } from "./openai-client.js";
+import {
+  fetchUsdToCurrencyFactor,
+  CURRENCY_RATE_STALE_MS,
+  ExchangeRateError,
+} from "./exchange-rate-client.js";
 import { getCachedAnalysis, cacheAnalysis, clearCache } from "./cache-manager.js";
 import { trackUsage, trackCacheHit, getUsageStats, getTodayStats } from "./usage-tracker.js";
 import {
@@ -28,6 +33,18 @@ import {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handleMessage(message, sender).then(sendResponse);
   return true; // keep message channel open for async response
+});
+
+const CURRENCY_ALARM = "currency-daily";
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create(CURRENCY_ALARM, { periodInMinutes: 24 * 60 });
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === CURRENCY_ALARM) {
+    maybeRefreshStaleCurrencyRate();
+  }
 });
 
 async function handleMessage(message, _sender) {
@@ -91,6 +108,7 @@ async function handleMessage(message, _sender) {
         return success(true);
 
       case MSG.GET_PREFERENCES:
+        await maybeRefreshStaleCurrencyRate();
         return success(await getPreferences());
 
       case MSG.SAVE_PREFERENCES:
@@ -147,7 +165,7 @@ async function handleAnalyzeJob(payload) {
     return error("Please add your resume in settings.", "NO_RESUME");
   }
 
-  const contentHash = await hashContent(jobText);
+  const contentHash = await hashContent(jobText, pageUrl);
 
   const cached = await getCachedAnalysis(contentHash);
   if (cached) {
@@ -193,7 +211,7 @@ async function handleParseResume(payload) {
   profile.projects = profile.projects || [];
   profile.additionalSections = profile.additionalSections || {};
 
-  // Normalize experience dates: convert "startDate"/"endDate" strings to month/year fields
+  // Normalize experience dates: ISO / free-text → month/year; month/year → ISO (YYYY-MM-DD) for UI
   for (const exp of profile.experience) {
     if (exp.startDate && (!exp.startMonth || !exp.startYear)) {
       const parsed = parseDateString(exp.startDate);
@@ -206,11 +224,20 @@ async function handleParseResume(payload) {
         exp.isCurrentCompany = true;
         exp.endMonth = "";
         exp.endYear = "";
+        exp.endDate = "";
       } else {
         const parsed = parseDateString(exp.endDate);
         if (!exp.endMonth) exp.endMonth = parsed.month;
         if (!exp.endYear) exp.endYear = parsed.year;
       }
+    }
+    if (exp.startMonth && exp.startYear && !/^\d{4}-\d{2}-\d{2}$/.test(String(exp.startDate || "").trim())) {
+      exp.startDate = monthYearToIsoDate(exp.startMonth, exp.startYear);
+    }
+    if (exp.isCurrentCompany) {
+      exp.endDate = "";
+    } else if (exp.endMonth && exp.endYear && !/^\d{4}-\d{2}-\d{2}$/.test(String(exp.endDate || "").trim())) {
+      exp.endDate = monthYearToIsoDate(exp.endMonth, exp.endYear);
     }
   }
 
@@ -238,6 +265,7 @@ async function handleParseResume(payload) {
         first.isCurrentCompany = true;
         first.endMonth = "";
         first.endYear = "";
+        first.endDate = "";
       }
     }
   }
@@ -270,7 +298,7 @@ async function handleParseResume(payload) {
 }
 
 async function handleGetCached(payload) {
-  const contentHash = await hashContent(payload.jobText);
+  const contentHash = await hashContent(payload.jobText, payload.pageUrl);
   const cached = await getCachedAnalysis(contentHash);
   return success(cached?.result || null);
 }
@@ -282,20 +310,44 @@ async function handleTestApiKey(payload) {
 }
 
 async function handleFetchCurrencyFactor(payload) {
-  const apiConfig = await getApiConfig();
-  if (!apiConfig.apiKey) {
-    return error("Please configure your OpenAI API key in settings.", "NO_API_KEY");
-  }
   const code = (payload?.currencyCode || "USD").toUpperCase();
   try {
-    const { factor, rawContent } = await fetchUsdToCurrencyFactor(code, apiConfig);
+    const { factor, rawContent } = await fetchUsdToCurrencyFactor(code);
     return success({
       factor,
       rawContent,
       fetchedAt: new Date().toISOString(),
     });
   } catch (err) {
-    return error(err.message || "Currency lookup failed", err.code || "CURRENCY_FETCH_ERROR");
+    const codeErr = err instanceof ExchangeRateError ? err.code : undefined;
+    return error(err.message || "Currency lookup failed", codeErr || "CURRENCY_FETCH_ERROR");
+  }
+}
+
+/**
+ * Refreshes USD→user currency when data is older than 24h (Frankfurter updates ~daily).
+ * Used on GET_PREFERENCES and on a daily alarm.
+ */
+async function maybeRefreshStaleCurrencyRate() {
+  const prefs = await getPreferences();
+  const code = (prefs.salaryCurrency || "USD").toUpperCase();
+  if (code === "USD") return;
+
+  const fetchedAt = prefs.currencyFactorFetchedAt ? Date.parse(prefs.currencyFactorFetchedAt) : 0;
+  if (Number.isFinite(fetchedAt) && Date.now() - fetchedAt < CURRENCY_RATE_STALE_MS) {
+    return;
+  }
+
+  try {
+    const { factor, rawContent } = await fetchUsdToCurrencyFactor(code);
+    await savePreferences({
+      ...prefs,
+      usdToDisplayCurrencyFactor: factor,
+      currencyFactorRawResponse: rawContent,
+      currencyFactorFetchedAt: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.warn("[currency] Stale refresh failed:", e?.message || e);
   }
 }
 
