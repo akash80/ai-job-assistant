@@ -1,0 +1,32 @@
+:root {
+  --ja-primary: #6366f1;
+  --ja-primary-hover: #4f46e5;
+  --ja-primary-light: #e0e7ff;
+
+  --ja-success: #22c55e;
+  --ja-warning: #f59e0b;
+  --ja-danger: #ef4444;
+  --ja-info: #3b82f6;
+
+  --ja-bg: #ffffff;
+  --ja-bg-secondary: #f8fafc;
+  --ja-border: #e2e8f0;
+  --ja-text: #1e293b;
+  --ja-text-secondary: #64748b;
+  --ja-text-muted: #94a3b8;
+
+  --ja-score-high: #22c55e;
+  --ja-score-medium: #f59e0b;
+  --ja-score-low: #ef4444;
+
+  --ja-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --ja-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --ja-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --ja-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+
+  --ja-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ja-radius-sm: 4px;
+  --ja-radius-md: 8px;
+  --ja-radius-lg: 12px;
+  --ja-radius-full: 9999px;
+}

@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="options.css" />
+  <title>AI Job Assistant — Settings</title>
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <div class="sidebar-brand">
+        <img src="../assets/icons/icon-32.png" alt="Logo" class="sidebar-logo" />
+        <span class="sidebar-title">AI Job Assistant</span>
+      </div>
+      <ul class="sidebar-nav">
+        <li><a href="#api" class="nav-link active" data-tab="api">API Configuration</a></li>
+        <li><a href="#resume" class="nav-link" data-tab="resume">Resume<span class="nav-warn" id="warn-resume"></span></a></li>
+        <li><a href="#profile" class="nav-link" data-tab="profile">Profile<span class="nav-warn" id="warn-profile"></span></a></li>
+        <li><a href="#preferences" class="nav-link" data-tab="preferences">Preferences<span class="nav-warn" id="warn-preferences"></span></a></li>
+        <li><a href="#answers" class="nav-link" data-tab="answers">Saved Answers<span class="nav-warn" id="warn-answers"></span></a></li>
+        <li><a href="#history" class="nav-link" data-tab="history">History</a></li>
+        <li><a href="#data" class="nav-link" data-tab="data">Data Management</a></li>
+      </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main">
+      <!-- API Tab -->
+      <section id="tab-api" class="tab-content active">
+        <h2>API Configuration</h2>
+        <p class="tab-desc">Connect your OpenAI account to power the AI analysis engine.</p>
+
+        <div class="form-group">
+          <label for="api-key">OpenAI API Key</label>
+          <div class="input-with-action">
+            <input type="password" id="api-key" placeholder="sk-..." class="input" />
+            <button id="toggle-key-vis" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
+          </div>
+          <p class="form-hint">Your key is stored locally and never sent to any server except OpenAI.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="model-select">Model</label>
+          <select id="model-select" class="input"></select>
+          <p class="form-hint" id="model-desc"></p>
+          <div id="model-pricing" class="model-pricing"></div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="temperature">Temperature</label>
+            <input type="number" id="temperature" class="input" min="0" max="1" step="0.1" value="0.3" />
+          </div>
+          <div class="form-group">
+            <label for="max-tokens">Max Tokens</label>
+            <input type="number" id="max-tokens" class="input" min="100" max="4000" step="100" value="1000" />
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button id="btn-test-key" class="btn btn-secondary">Test Connection</button>
+          <button id="btn-save-api" class="btn btn-primary">Save Changes</button>
+        </div>
+        <div id="api-status" class="status-msg" style="display:none"></div>
+      </section>
+
+      <!-- Resume Tab -->
+      <section id="tab-resume" class="tab-content">
+        <h2>Resume</h2>
+        <p class="tab-desc">Paste your resume and let AI intelligently extract your profile.</p>
+
+        <div class="instructions-card">
+          <h3>How it works</h3>
+          <ol>
+            <li><strong>Copy your entire resume</strong> — open your resume (PDF, Word, or any format), select all text (Ctrl+A), and copy it (Ctrl+C).</li>
+            <li><strong>Paste it below</strong> — click the text area and paste (Ctrl+V). Don't worry about formatting — AI understands any layout.</li>
+            <li><strong>Click "Save &amp; Parse with AI"</strong> — the AI will read your resume, extract all data, and auto-fill your entire profile.</li>
+            <li><strong>Review the preview</strong> — you'll see exactly what AI extracted as a structured JSON. Then check the Profile tab to review and edit.</li>
+          </ol>
+          <div class="instructions-tips">
+            <p><strong>Works with any format:</strong> The AI handles hundreds of resume formats — standard headings, creative layouts, different section names, any language.</p>
+            <p><strong>Nothing is missed:</strong> Skills, experience, education, projects, certifications, languages, open source, awards, publications — if it's in your resume, it's extracted.</p>
+          </div>
+        </div>
+
+        <!-- PDF Upload -->
+        <div class="profile-section">
+          <h3 class="profile-section-title">Upload Resume PDF</h3>
+          <p class="form-hint" style="margin-bottom:10px">Upload your resume as a PDF file. This file will be used when job applications ask to upload your resume.</p>
+          <div class="file-upload-area" id="pdf-upload-area">
+            <input type="file" id="resume-pdf-input" accept=".pdf" style="display:none" />
+            <div id="pdf-upload-placeholder" class="file-upload-placeholder">
+              <span class="file-upload-icon">&#128196;</span>
+              <span class="file-upload-text">Click to upload PDF or drag &amp; drop</span>
+              <span class="file-upload-hint">Max 5 MB &middot; PDF only</span>
+            </div>
+            <div id="pdf-upload-info" class="file-upload-info" style="display:none">
+              <span class="file-upload-icon">&#9989;</span>
+              <div class="file-upload-details">
+                <span id="pdf-file-name" class="file-name"></span>
+                <span id="pdf-file-size" class="file-size"></span>
+              </div>
+              <button id="btn-remove-pdf" class="btn btn-sm btn-danger">Remove</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Resume Text -->
+        <div class="profile-section">
+          <h3 class="profile-section-title">Resume Text (for AI Parsing)</h3>
+          <p class="form-hint" style="margin-bottom:10px">Paste your resume text below for AI to parse into your profile. This is separate from the PDF upload.</p>
+          <div class="form-group">
+            <textarea id="resume-text" class="input textarea-large" placeholder="Paste your full resume text here...&#10;&#10;Any format works — the AI will figure it out.&#10;&#10;Tip: Open your resume file, press Ctrl+A to select all, Ctrl+C to copy, then Ctrl+V here."></textarea>
+            <div class="form-meta">
+              <span id="resume-words">0 words</span>
+              <span id="resume-date"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button id="btn-save-resume" class="btn btn-primary btn-lg">Save &amp; Parse with AI</button>
+        </div>
+
+        <div id="resume-parse-progress" class="parse-progress" style="display:none">
+          <div class="spinner-sm"></div>
+          <div class="parse-steps">
+            <span id="parse-step-text">Sending resume to AI for parsing...</span>
+            <div class="parse-step-list">
+              <span class="parse-step" id="ps-1">Reading resume</span>
+              <span class="parse-step" id="ps-2">Extracting sections</span>
+              <span class="parse-step" id="ps-3">Building profile</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="resume-status" class="status-msg" style="display:none"></div>
+
+        <div id="json-preview-section" class="json-preview-section" style="display:none">
+          <div class="json-preview-header">
+            <h3>AI Parsed Data Preview</h3>
+            <div class="json-preview-actions">
+              <button id="btn-copy-json" class="btn btn-sm btn-secondary">Copy JSON</button>
+              <button id="btn-toggle-json" class="btn btn-sm btn-secondary">Collapse</button>
+            </div>
+          </div>
+          <div class="json-preview-stats" id="json-stats"></div>
+          <pre id="json-preview" class="json-preview"></pre>
+        </div>
+      </section>
+
+      <!-- Profile Tab -->
+      <section id="tab-profile" class="tab-content">
+        <h2>Profile</h2>
+        <p class="tab-desc">Auto-filled from your resume. Edit anything below. Fields with missing data are highlighted. This data powers form auto-fill.</p>
+
+        <!-- Contact Info -->
+        <div class="profile-section">
+          <h3 class="profile-section-title">Contact Information</h3>
+          <div class="form-row">
+            <div class="form-group"><label for="p-name">Full Name</label><input type="text" id="p-name" class="input" placeholder="e.g. Akash Arora" /></div>
+            <div class="form-group"><label for="p-email">Email</label><input type="email" id="p-email" class="input" placeholder="e.g. akash@example.com" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label for="p-phone">Phone</label><input type="tel" id="p-phone" class="input" placeholder="e.g. +91 9791492742" /></div>
+            <div class="form-group"><label for="p-location">Location</label><input type="text" id="p-location" class="input" placeholder="e.g. Noida, India" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label for="p-linkedin">LinkedIn</label><input type="url" id="p-linkedin" class="input" placeholder="https://linkedin.com/in/..." /></div>
+            <div class="form-group"><label for="p-github">GitHub</label><input type="url" id="p-github" class="input" placeholder="https://github.com/..." /></div>
+          </div>
+          <div class="form-group"><label for="p-portfolio">Portfolio / Website</label><input type="url" id="p-portfolio" class="input" placeholder="https://..." /></div>
+        </div>
+
+        <!-- Professional Info -->
+        <div class="profile-section">
+          <h3 class="profile-section-title">Professional</h3>
+          <div class="form-row">
+            <div class="form-group"><label for="p-title">Current Title</label><input type="text" id="p-title" class="input" placeholder="e.g. Senior Backend Engineer" /></div>
+            <div class="form-group"><label for="p-company">Current Company</label><input type="text" id="p-company" class="input" placeholder="e.g. Encora Inc" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label for="p-headline">Professional Headline</label><input type="text" id="p-headline" class="input" placeholder="e.g. Senior Backend Engineer | Java | Distributed Systems" /></div>
+            <div class="form-group"><label for="p-experience">Years of Experience</label><input type="text" id="p-experience" class="input" placeholder="e.g. 8" /></div>
+          </div>
+          <div class="form-group"><label for="p-summary">Professional Summary</label><textarea id="p-summary" class="input textarea-small" placeholder="e.g. Senior Backend Engineer with 8+ years experience..."></textarea></div>
+        </div>
+
+        <!-- Skills -->
+        <div class="profile-section">
+          <h3 class="profile-section-title">Skills</h3>
+          <div id="skills-container"></div>
+        </div>
+
+        <!-- Experience -->
+        <div class="profile-section">
+          <div class="section-header">
+            <h3 class="profile-section-title">Experience</h3>
+            <button class="btn btn-sm btn-secondary" id="btn-add-experience">+ Add</button>
+          </div>
+          <div id="experience-list"></div>
+        </div>
+
+        <!-- Education -->
+        <div class="profile-section">
+          <div class="section-header">
+            <h3 class="profile-section-title">Education</h3>
+            <button class="btn btn-sm btn-secondary" id="btn-add-education">+ Add</button>
+          </div>
+          <div id="education-list"></div>
+        </div>
+
+        <!-- Projects -->
+        <div class="profile-section">
+          <div class="section-header">
+            <h3 class="profile-section-title">Projects</h3>
+            <button class="btn btn-sm btn-secondary" id="btn-add-project">+ Add</button>
+          </div>
+          <div id="projects-list"></div>
+        </div>
+
+        <!-- Certifications -->
+        <div class="profile-section">
+          <div class="section-header">
+            <h3 class="profile-section-title">Certifications</h3>
+            <button class="btn btn-sm btn-secondary" id="btn-add-cert">+ Add</button>
+          </div>
+          <div id="certifications-list"></div>
+        </div>
+
+        <!-- Spoken Languages -->
+        <div class="profile-section">
+          <div class="section-header">
+            <h3 class="profile-section-title">Spoken Languages</h3>
+            <button class="btn btn-sm btn-secondary" id="btn-add-lang">+ Add</button>
+          </div>
+          <div id="languages-list"></div>
+        </div>
+
+        <!-- Internships -->
+        <div class="profile-section">
+          <div class="section-header">
+            <h3 class="profile-section-title">Internships</h3>
+            <button class="btn btn-sm btn-secondary" id="btn-add-internship">+ Add</button>
+          </div>
+          <div id="internships-list"></div>
+        </div>
+
+        <!-- Open Source -->
+        <div class="profile-section">
+          <div class="section-header">
+            <h3 class="profile-section-title">Open Source</h3>
+            <button class="btn btn-sm btn-secondary" id="btn-add-opensource">+ Add</button>
+          </div>
+          <div id="opensource-list"></div>
+        </div>
+
+        <!-- Additional Sections -->
+        <div id="additional-sections-container"></div>
+
+        <div class="form-actions">
+          <button id="btn-save-profile" class="btn btn-primary">Save Profile</button>
+        </div>
+        <div id="profile-status" class="status-msg" style="display:none"></div>
+      </section>
+
+      <!-- Preferences Tab -->
+      <section id="tab-preferences" class="tab-content">
+        <h2>Job Preferences</h2>
+        <p class="tab-desc">Help the AI make better recommendations by sharing your preferences.</p>
+
+        <div class="form-group">
+          <label>Remote Work</label>
+          <div class="radio-group">
+            <label class="radio-label"><input type="radio" name="remote" value="true" /> Remote Only</label>
+            <label class="radio-label"><input type="radio" name="remote" value="false" /> On-site Only</label>
+            <label class="radio-label"><input type="radio" name="remote" value="null" checked /> Either</label>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="pref-min-salary">Min Salary</label>
+            <input type="text" id="pref-min-salary" class="input" placeholder="e.g. 80000" />
+          </div>
+          <div class="form-group">
+            <label for="pref-max-salary">Max Salary</label>
+            <input type="text" id="pref-max-salary" class="input" placeholder="e.g. 120000" />
+          </div>
+          <div class="form-group">
+            <label for="pref-currency">Currency</label>
+            <select id="pref-currency" class="input">
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+              <option value="INR">INR</option>
+              <option value="CAD">CAD</option>
+              <option value="AUD">AUD</option>
+            </select>
+            <p class="form-hint">Default is USD. When you pick another currency, we call OpenAI once for a USD→currency rate and use it for model pricing and estimated analysis cost. The raw JSON response is saved locally.</p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="pref-roles">Preferred Roles (comma-separated)</label>
+          <input type="text" id="pref-roles" class="input" placeholder="e.g. Backend Developer, Full Stack Developer" />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="pref-location">Preferred Location</label>
+            <input type="text" id="pref-location" class="input" placeholder="e.g. Noida, Bangalore, Remote" />
+          </div>
+          <div class="form-group">
+            <label for="pref-excluded-locations">Excluded Locations</label>
+            <input type="text" id="pref-excluded-locations" class="input" placeholder="e.g. locations you want to avoid" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Willing to Relocate</label>
+          <label class="toggle-label">
+            <input type="checkbox" id="pref-relocate" />
+            <span>Yes, I'm willing to relocate</span>
+          </label>
+        </div>
+
+        <div class="form-actions">
+          <button id="btn-save-prefs" class="btn btn-primary">Save Preferences</button>
+        </div>
+        <div id="prefs-status" class="status-msg" style="display:none"></div>
+      </section>
+
+      <!-- Saved Answers Tab -->
+      <section id="tab-answers" class="tab-content">
+        <h2>Saved Answers</h2>
+        <p class="tab-desc">Pre-fill answers to common application questions. The AI will use these to auto-fill forms.</p>
+
+        <!-- Common Questions -->
+        <div class="common-questions-section">
+          <h3>Common Application Questions</h3>
+          <p class="form-hint" style="margin-bottom:12px">Click any unanswered question to add your answer. These questions appear in most job applications.</p>
+          <div id="common-questions-grid" class="common-questions-grid"></div>
+        </div>
+
+        <!-- Custom Answers -->
+        <div style="margin-top:28px">
+          <h3 style="font-size:15px;font-weight:600;margin-bottom:12px">Your Custom Answers</h3>
+          <div id="answers-list" class="answers-container">
+            <p class="empty-state">No custom answers yet.</p>
+          </div>
+          <div class="form-actions" style="margin-top:12px">
+            <button id="btn-add-answer" class="btn btn-secondary">+ Add Custom Answer</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- History Tab -->
+      <section id="tab-history" class="tab-content">
+        <h2>Application History</h2>
+        <p class="tab-desc">Track jobs you've analyzed, applied to, or skipped.</p>
+        <div id="history-list" class="history-container">
+          <p class="empty-state">No history yet. Start analyzing job postings!</p>
+        </div>
+      </section>
+
+      <!-- Data Management Tab -->
+      <section id="tab-data" class="tab-content">
+        <h2>Data Management</h2>
+        <p class="tab-desc">Export, import, or clear your data.</p>
+        <div class="data-actions">
+          <div class="data-card">
+            <h3>Export Data</h3>
+            <p>Download all your data (profile, answers, history) as a JSON file.</p>
+            <button id="btn-export" class="btn btn-secondary">Export All Data</button>
+          </div>
+          <div class="data-card">
+            <h3>Import Data</h3>
+            <p>Restore from a previously exported JSON file.</p>
+            <input type="file" id="file-import" accept=".json" style="display:none" />
+            <button id="btn-import" class="btn btn-secondary">Import Data</button>
+          </div>
+          <div class="data-card data-card-danger">
+            <h3>Clear Cache</h3>
+            <p>Remove cached analysis results. Your profile and answers are kept.</p>
+            <button id="btn-clear-cache" class="btn btn-danger">Clear Cache</button>
+          </div>
+          <div class="data-card data-card-danger">
+            <h3>Clear All Data</h3>
+            <p>Permanently delete all data including API key, profile, answers, and history.</p>
+            <button id="btn-clear-all" class="btn btn-danger">Clear Everything</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

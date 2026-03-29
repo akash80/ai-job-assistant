@@ -1,0 +1,9 @@
+/* AI Job Assistant — Content Script Styles
+   These styles are injected into the host page.
+   Keep minimal to avoid conflicts. */
+
+.ja-filling-active {
+  outline: 2px solid #6366f1 !important;
+  outline-offset: 2px !important;
+  transition: outline 200ms ease !important;
+}

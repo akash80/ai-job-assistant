@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>AI Job Assistant</title>
+</head>
+<body>
+  <div class="popup">
+    <div class="popup-header">
+      <div class="popup-brand">
+        <img src="../assets/icons/icon-32.png" alt="Logo" class="popup-logo" />
+        <div>
+          <h1 class="popup-title">AI Job Assistant</h1>
+          <p class="popup-subtitle">Your job search co-pilot</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Not Configured State -->
+    <div id="setup-required" class="popup-section" style="display:none">
+      <div class="setup-banner">
+        <p class="setup-banner-title">Setup Required</p>
+        <p class="setup-banner-desc">Complete these steps to get started:</p>
+        <ul class="setup-checklist">
+          <li id="check-apikey"><span class="check-icon">&#9744;</span> Add your OpenAI API key</li>
+          <li id="check-resume"><span class="check-icon">&#9744;</span> Add your resume</li>
+        </ul>
+        <button id="btn-open-settings" class="btn btn-primary btn-block">Open Settings</button>
+      </div>
+    </div>
+
+    <!-- Ready State -->
+    <div id="ready-state" style="display:none">
+      <div class="popup-section">
+        <h2 class="section-title">Status</h2>
+        <div class="status-grid">
+          <div class="status-item">
+            <span class="status-dot status-ok"></span>
+            <span class="status-label">API Key</span>
+            <span class="status-value" id="status-api">Configured</span>
+          </div>
+          <div class="status-item">
+            <span class="status-dot" id="dot-resume"></span>
+            <span class="status-label">Resume</span>
+            <span class="status-value" id="status-resume">--</span>
+          </div>
+          <div class="status-item">
+            <span class="status-dot status-ok"></span>
+            <span class="status-label">Model</span>
+            <span class="status-value" id="status-model">--</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="popup-section">
+        <button id="btn-analyze" class="btn btn-primary btn-block">
+          <span>&#128202;</span> Analyze This Page
+        </button>
+      </div>
+
+      <div class="popup-section">
+        <h2 class="section-title">Today's Activity</h2>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-value" id="stat-calls">0</span>
+            <span class="stat-label">Analyses</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="stat-tokens">0</span>
+            <span class="stat-label">Tokens</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="stat-cost">$0.00</span>
+            <span class="stat-label">Est. Cost</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="stat-cache">0</span>
+            <span class="stat-label">Cache Hits</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="popup-footer">
+        <button id="btn-settings" class="btn btn-ghost">
+          <span>&#9881;&#65039;</span> Settings
+        </button>
+        <button id="btn-history" class="btn btn-ghost">
+          <span>&#128220;</span> History
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
