@@ -1,5 +1,6 @@
 import { STORAGE_KEYS, CACHE_MAX_AGE_MS, CACHE_MAX_SIZE_BYTES } from "../shared/constants.js";
 import { getFromStorage, saveToStorage } from "./storage-manager.js";
+import { normalizeJobPageUrl } from "../shared/utils.js";
 
 export async function getCachedAnalysis(contentHash) {
   const cache = await getCache();
@@ -15,6 +16,39 @@ export async function getCachedAnalysis(contentHash) {
   }
 
   return entry;
+}
+
+/**
+ * Fallback cache lookup by normalized job URL.
+ * Makes cache more forgiving on dynamic pages where small text changes alter content hash.
+ */
+export async function getCachedAnalysisByUrl(pageUrl) {
+  const normalized = normalizeJobPageUrl(pageUrl);
+  if (!normalized) return null;
+
+  const cache = await getCache();
+  let newest = null;
+  let mutated = false;
+
+  for (const [key, entry] of Object.entries(cache)) {
+    const age = Date.now() - new Date(entry.timestamp).getTime();
+    if (age > CACHE_MAX_AGE_MS) {
+      delete cache[key];
+      mutated = true;
+      continue;
+    }
+    const entryUrl = normalizeJobPageUrl(entry.jobUrl || "");
+    if (entryUrl === normalized) {
+      if (!newest || new Date(entry.timestamp) > new Date(newest.timestamp)) {
+        newest = entry;
+      }
+    }
+  }
+
+  if (mutated) {
+    await saveCache(cache);
+  }
+  return newest;
 }
 
 export async function cacheAnalysis(contentHash, result, meta = {}) {

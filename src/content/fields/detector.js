@@ -6,8 +6,9 @@ export function detectFields() {
 }
 
 export function detectFileInputs() {
-  const fileInputs = document.querySelectorAll(FILE_INPUT_SELECTOR);
-  return Array.from(fileInputs).filter((el) => !el.disabled);
+  const fileInputs = Array.from(document.querySelectorAll(FILE_INPUT_SELECTOR)).filter((el) => !el.disabled);
+  const customUploadTriggers = detectCustomResumeUploadTriggers();
+  return dedupeElements([...fileInputs, ...customUploadTriggers]);
 }
 
 function isVisible(el) {
@@ -30,6 +31,45 @@ function isInteractable(el) {
   if (el.readOnly) return false;
   if (el.getAttribute("aria-disabled") === "true") return false;
   return true;
+}
+
+function detectCustomResumeUploadTriggers() {
+  const containers = Array.from(
+    document.querySelectorAll(
+      ".attachmentField, .attachWrapper, [class*='attachment'], [id*='attach']",
+    ),
+  );
+  const out = [];
+
+  for (const c of containers) {
+    const text = c.textContent?.toLowerCase() || "";
+    if (!/(resume|cv|curriculum\s+vitae|upload\s+a\s+cv|upload\s+resume)/i.test(text)) continue;
+
+    const trigger =
+      c.querySelector("input[type='file']") ||
+      c.querySelector(".addAttachments") ||
+      c.querySelector(".attachActions [role='button']") ||
+      c.querySelector(".attachActions") ||
+      c.querySelector(".attachmentBtn") ||
+      c.querySelector(".attachmentLabel") ||
+      c.querySelector("[role='button']");
+
+    if (trigger && isVisible(trigger)) out.push(trigger);
+  }
+
+  return out;
+}
+
+function dedupeElements(elements) {
+  const seen = new Set();
+  const out = [];
+  for (const el of elements) {
+    if (!el) continue;
+    if (seen.has(el)) continue;
+    seen.add(el);
+    out.push(el);
+  }
+  return out;
 }
 
 export function groupRadioButtons(fields) {

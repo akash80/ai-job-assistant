@@ -69,14 +69,22 @@ export async function fillSelect(selectElement, targetValue) {
 }
 
 export async function fillRadio(radioGroup, targetValue) {
-  const radios = Array.isArray(radioGroup) ? radioGroup : Array.from(radioGroup);
-  const target = targetValue.toLowerCase();
+  const base = Array.isArray(radioGroup) ? radioGroup : Array.from(radioGroup);
+  let radios = base;
+  if (base.length === 1 && base[0]?.name) {
+    radios = Array.from(document.querySelectorAll(`input[type="radio"][name="${CSS.escape(base[0].name)}"]`));
+  }
+  radios = radios.filter((r) => !r.disabled && isVisibleLike(r));
+  const target = normalizeToken(targetValue);
 
   const match =
-    radios.find((r) => r.value.toLowerCase() === target) ||
+    radios.find((r) => normalizeToken(r.value) === target) ||
+    radios.find((r) => normalizeToken(getLabelText(r)) === target) ||
+    radios.find((r) => isBooleanEquivalent(target, normalizeToken(r.value), normalizeToken(getLabelText(r)))) ||
     radios.find((r) => {
-      const label = getLabelText(r).toLowerCase();
-      return label.includes(target) || target.includes(label);
+      const valueTok = normalizeToken(r.value);
+      const labelTok = normalizeToken(getLabelText(r));
+      return valueTok.includes(target) || target.includes(valueTok) || labelTok.includes(target) || target.includes(labelTok);
     });
 
   if (match) {
@@ -109,13 +117,15 @@ export async function fillFileInput(fileInput, base64Data, fileName, mimeType) {
       byteArray[i] = byteChars.charCodeAt(i);
     }
     const file = new File([byteArray], fileName, { type: mimeType });
+    const targetInput = await resolveFileInputTarget(fileInput);
+    if (!targetInput) return false;
 
     const dt = new DataTransfer();
     dt.items.add(file);
-    fileInput.files = dt.files;
+    targetInput.files = dt.files;
 
-    fileInput.dispatchEvent(new Event("change", { bubbles: true }));
-    fileInput.dispatchEvent(new Event("input", { bubbles: true }));
+    targetInput.dispatchEvent(new Event("change", { bubbles: true }));
+    targetInput.dispatchEvent(new Event("input", { bubbles: true }));
     return true;
   } catch (err) {
     console.error("Failed to fill file input:", err);
@@ -138,6 +148,10 @@ export async function fillField(element, value) {
     return fillContentEditable(element, value);
   }
 
+  if (isComboboxInput(element)) {
+    return fillCombobox(element, value);
+  }
+
   return typeHuman(element, value);
 }
 
@@ -153,8 +167,12 @@ export async function executeFillPlan(plan, callbacks = {}) {
     onFieldStart?.(field, filled, total);
 
     try {
-      await fillField(field.element, field.value);
-      filled++;
+      const ok = await fillField(field.element, field.value);
+      if (ok === false) {
+        skipped++;
+      } else {
+        filled++;
+      }
     } catch (err) {
       console.error(`Fill failed for ${field.fieldType}:`, err);
       errors++;
@@ -168,8 +186,12 @@ export async function executeFillPlan(plan, callbacks = {}) {
     const answer = await onUnknownField?.(field);
     if (answer) {
       try {
-        await fillField(field.element, answer);
-        filled++;
+        const ok = await fillField(field.element, answer);
+        if (ok === false) {
+          skipped++;
+        } else {
+          filled++;
+        }
       } catch (err) {
         console.error(`Fill failed for unknown ${field.fieldType}:`, err);
         errors++;
@@ -251,34 +273,82 @@ function clearFieldValue(element) {
 }
 
 function findBestOption(selectElement, targetValue) {
-  const options = Array.from(selectElement.options);
-  const target = targetValue.toLowerCase();
+  const options = Array.from(selectElement.options).filter((o) => !o.disabled);
+  const target = normalizeToken(targetValue);
+  const candidateOptions = options.filter((o) => !isPlaceholderOption(o));
+  const pool = candidateOptions.length > 0 ? candidateOptions : options;
 
-  let match = options.find(
-    (o) => o.value.toLowerCase() === target || o.textContent.trim().toLowerCase() === target,
+  let match = pool.find(
+    (o) => normalizeToken(o.value) === target || normalizeToken(o.textContent) === target,
   );
   if (match) return match;
 
-  match = options.find(
+  match = pool.find(
     (o) =>
-      o.textContent.trim().toLowerCase().includes(target) ||
-      target.includes(o.textContent.trim().toLowerCase()),
+      normalizeToken(o.textContent).includes(target) ||
+      target.includes(normalizeToken(o.textContent)),
   );
   if (match) return match;
 
-  const yesRe = /^(yes|y|true|1)$/i;
-  const noRe = /^(no|n|false|0)$/i;
+  match = pool.find((o) => isBooleanEquivalent(target, normalizeToken(o.value), normalizeToken(o.textContent)));
+  if (match) return match;
 
-  if (yesRe.test(target)) {
-    match = options.find((o) => yesRe.test(o.value) || yesRe.test(o.textContent.trim()));
-    if (match) return match;
+  // Fuzzy score: token overlap for "United States" vs "USA", "Immediate" vs "As soon as possible", etc.
+  let best = null;
+  let bestScore = 0;
+  for (const o of pool) {
+    const s = scoreOptionMatch(target, `${normalizeToken(o.value)} ${normalizeToken(o.textContent)}`);
+    if (s > bestScore) {
+      best = o;
+      bestScore = s;
+    }
   }
-  if (noRe.test(target)) {
-    match = options.find((o) => noRe.test(o.value) || noRe.test(o.textContent.trim()));
-    if (match) return match;
+  if (best && bestScore >= 0.45) {
+    return best;
   }
 
   return null;
+}
+
+function normalizeToken(v) {
+  return String(v || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+}
+
+function isPlaceholderOption(option) {
+  const val = normalizeToken(option.value);
+  const txt = normalizeToken(option.textContent);
+  if (!val) return true;
+  return /^(select|choose|--|please select|pick one)$/.test(txt);
+}
+
+function isBooleanEquivalent(target, optionValue, optionLabel) {
+  const yesSet = new Set(["yes", "y", "true", "1", "authorized", "allowed", "available"]);
+  const noSet = new Set(["no", "n", "false", "0", "not authorized", "not available"]);
+  if (yesSet.has(target)) {
+    return yesSet.has(optionValue) || yesSet.has(optionLabel);
+  }
+  if (noSet.has(target)) {
+    return noSet.has(optionValue) || noSet.has(optionLabel);
+  }
+  return false;
+}
+
+function scoreOptionMatch(target, candidate) {
+  if (!target || !candidate) return 0;
+  const t = new Set(target.split(" ").filter(Boolean));
+  const c = new Set(candidate.split(" ").filter(Boolean));
+  if (t.size === 0 || c.size === 0) return 0;
+  let overlap = 0;
+  for (const tok of t) {
+    if (c.has(tok)) overlap++;
+  }
+  return overlap / Math.max(t.size, c.size);
+}
+
+function isVisibleLike(el) {
+  const style = window.getComputedStyle(el);
+  if (style.display === "none" || style.visibility === "hidden") return false;
+  return !(el.offsetParent === null && style.position !== "fixed");
 }
 
 function getRandomNearbyKey(char) {
@@ -297,4 +367,154 @@ function getLabelText(el) {
   const parent = el.closest("label");
   if (parent) return parent.textContent.trim();
   return "";
+}
+
+async function resolveFileInputTarget(element) {
+  if (element?.tagName?.toLowerCase() === "input" && (element.type || "").toLowerCase() === "file") {
+    return element;
+  }
+
+  // Try nearby first.
+  const nearby = findNearbyFileInput(element);
+  if (nearby) return nearby;
+
+  // Trigger custom uploader and then look for revealed/created file input.
+  const before = new Set(Array.from(document.querySelectorAll('input[type="file"]')));
+  try {
+    element?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    await sleep(randomBetween(120, 240));
+    element?.click?.();
+    element?.dispatchEvent?.(new Event("click", { bubbles: true }));
+  } catch {
+    // ignore click failures
+  }
+
+  for (let i = 0; i < 8; i++) {
+    await sleep(120);
+    const candidate = findNearbyFileInput(element) || findNewFileInput(before);
+    if (candidate) return candidate;
+  }
+  return null;
+}
+
+function findNearbyFileInput(element) {
+  const root = element?.closest?.(".attachmentField, .attachWrapper, form, td, div") || element?.parentElement || document;
+  const inRoot = root.querySelector?.('input[type="file"]:not([disabled])');
+  if (inRoot) return inRoot;
+  return null;
+}
+
+function findNewFileInput(beforeSet) {
+  const all = Array.from(document.querySelectorAll('input[type="file"]:not([disabled])'));
+  const created = all.find((el) => !beforeSet.has(el));
+  if (created) return created;
+  return all.find((el) => {
+    const style = window.getComputedStyle(el);
+    return style.display !== "none" || style.visibility !== "hidden";
+  }) || null;
+}
+
+function isComboboxInput(el) {
+  const role = (el.getAttribute("role") || "").toLowerCase();
+  const hasOwnedList = !!el.getAttribute("aria-owns");
+  const cls = (el.className || "").toLowerCase();
+  return role === "combobox" || hasOwnedList || cls.includes("paginatedselect");
+}
+
+async function fillCombobox(input, targetValue) {
+  const target = String(targetValue || "").trim();
+  if (!target) return false;
+
+  input.scrollIntoView({ behavior: "smooth", block: "center" });
+  await sleep(randomBetween(150, 300));
+  input.classList.add(FILL_ACTIVE_CLASS);
+  input.focus();
+  input.click();
+
+  const openBtn = findLinkedComboboxButton(input);
+  if (openBtn) {
+    openBtn.click();
+    await sleep(randomBetween(120, 250));
+  }
+
+  // Type query so remote/paginated picklists can load candidate options.
+  clearFieldValue(input);
+  setNativeValue(input, target);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new KeyboardEvent("keyup", { key: "a", bubbles: true }));
+  await sleep(randomBetween(220, 420));
+
+  // Try explicit option click first.
+  const options = getComboboxOptions(input);
+  const best = findBestComboboxOption(options, target);
+  if (best) {
+    best.scrollIntoView({ block: "nearest" });
+    best.click();
+    best.dispatchEvent(new Event("change", { bubbles: true }));
+    await sleep(randomBetween(120, 260));
+  } else {
+    // Fallback keyboard selection for widgets that don't expose options accessibly.
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent("keyup", { key: "ArrowDown", bubbles: true }));
+    await sleep(randomBetween(80, 180));
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+    await sleep(randomBetween(120, 260));
+  }
+
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  input.dispatchEvent(new Event("blur", { bubbles: true }));
+  input.classList.remove(FILL_ACTIVE_CLASS);
+
+  // Success if hidden backing field got value OR the visible input changed from empty/placeholder.
+  const hidden = findLinkedHiddenField(input);
+  if (hidden && String(hidden.value || "").trim()) return true;
+  const current = String(input.value || "").trim().toLowerCase();
+  return !!current && current !== "no selection";
+}
+
+function findLinkedComboboxButton(input) {
+  if (input.id) {
+    const guessed = document.getElementById(input.id.replace("_input", "_selectButton"));
+    if (guessed) return guessed;
+  }
+  const container = input.closest(".paginatedPicklistContainer, .fd-input-group, td, div");
+  return container?.querySelector("button.rcmpaginatedselectbutton, button[aria-label], button.fd-select__button") || null;
+}
+
+function getComboboxOptions(input) {
+  const listId = input.getAttribute("aria-owns");
+  const listEl = listId ? document.getElementById(listId) : null;
+  const root = listEl || document;
+  return Array.from(
+    root.querySelectorAll(
+      '[role="option"], li[role="option"], .fd-list__item, .ui-select-list-item, li, div[aria-selected]',
+    ),
+  ).filter((el) => normalizeToken(el.textContent).length > 0);
+}
+
+function findBestComboboxOption(options, targetValue) {
+  const target = normalizeToken(targetValue);
+  let match = options.find((o) => normalizeToken(o.textContent) === target);
+  if (match) return match;
+  match = options.find((o) => normalizeToken(o.textContent).includes(target) || target.includes(normalizeToken(o.textContent)));
+  if (match) return match;
+
+  let best = null;
+  let bestScore = 0;
+  for (const o of options) {
+    const s = scoreOptionMatch(target, normalizeToken(o.textContent));
+    if (s > bestScore) {
+      bestScore = s;
+      best = o;
+    }
+  }
+  return bestScore >= 0.45 ? best : null;
+}
+
+function findLinkedHiddenField(input) {
+  const cell = input.closest("td, .sfCascadingPicklist, .paginatedPicklistContainer, div");
+  if (!cell) return null;
+  // SuccessFactors/SF often mirrors combobox to hidden input used on submit.
+  return cell.querySelector('input[type="hidden"][name^="tor__f"], input[type="hidden"][name], input[type="hidden"]');
 }

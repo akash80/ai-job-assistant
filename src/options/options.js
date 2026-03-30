@@ -31,7 +31,9 @@ const COMMON_QUESTIONS = [
 ];
 
 const PROFILE_SIMPLE_FIELDS = [
-  { id: "p-name", key: "name" },
+  { id: "p-firstName", key: "firstName" },
+  { id: "p-middleName", key: "middleName" },
+  { id: "p-lastName", key: "lastName" },
   { id: "p-email", key: "email" },
   { id: "p-phone", key: "phone" },
   { id: "p-location", key: "location" },
@@ -42,6 +44,7 @@ const PROFILE_SIMPLE_FIELDS = [
   { id: "p-company", key: "currentCompany" },
   { id: "p-headline", key: "headline" },
   { id: "p-experience", key: "yearsExperience" },
+  { id: "p-keywords", key: "keywords" },
   { id: "p-summary", key: "summary" },
 ];
 
@@ -889,11 +892,24 @@ function collectOpenSource() {
 
 async function saveProfileHandler() {
   const profile = {};
+  const existing = currentProfileData || {};
 
   for (const f of PROFILE_SIMPLE_FIELDS) {
     const el = document.getElementById(f.id);
     if (el) profile[f.key] = el.value.trim();
   }
+
+  // Maintain legacy `profile.name` as full name for older sites and matching logic.
+  // If user had an older profile (only `name`), derive first/middle/last so saving doesn't wipe it.
+  if ((!profile.firstName || !profile.lastName) && existing.name) {
+    const parts = String(existing.name || "").trim().split(/\s+/).filter(Boolean);
+    if (!profile.firstName) profile.firstName = parts[0] || "";
+    if (!profile.lastName) profile.lastName = parts.length > 1 ? parts[parts.length - 1] : "";
+    if (!profile.middleName && parts.length > 2) profile.middleName = parts.slice(1, -1).join(" ");
+  }
+
+  const nameParts = [profile.firstName, profile.middleName, profile.lastName].map((s) => (s || "").trim()).filter(Boolean);
+  profile.name = nameParts.join(" ").trim();
 
   profile.skills = {};
   document.querySelectorAll(".skill-input").forEach((input) => {
@@ -910,7 +926,6 @@ async function saveProfileHandler() {
   profile.openSource = collectOpenSource();
 
   // Preserve AI-parsed data not editable inline
-  const existing = currentProfileData || {};
   profile.publications = existing.publications || [];
   profile.awards = existing.awards || [];
   profile.volunteer = existing.volunteer || [];

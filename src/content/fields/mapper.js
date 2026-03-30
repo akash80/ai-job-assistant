@@ -143,6 +143,10 @@ export function buildFillPlan(fields, profile, answers) {
         confidence: classification.confidence,
         source: classification.sourceType === "profileKey" ? "profile" : "answers",
       });
+    } else if (classification.type === "middle_name" && !profile?.middleName) {
+      // If middle name is not provided, explicitly leave the field empty
+      // (even if it is marked required) instead of prompting the user.
+      plan.skippedFields.push({ element, reason: "middle_name_empty", label });
     } else if (classification.type !== "unknown" || element.required || element.getAttribute("aria-required") === "true") {
       plan.unknownFields.push({
         element,

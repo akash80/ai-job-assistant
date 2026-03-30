@@ -1,7 +1,9 @@
 export const FIELD_PATTERNS = [
-  { type: "first_name", regex: /first.?name|given.?name|fname/i, profileKey: "name", transform: "firstName" },
-  { type: "last_name", regex: /last.?name|surname|family.?name|lname/i, profileKey: "name", transform: "lastName" },
-  { type: "full_name", regex: /\bname\b|full.?name|your.?name|applicant.?name/i, profileKey: "name" },
+  { type: "first_name", regex: /first.?name|given.?name|fname/i, profileKey: "firstName" },
+  { type: "middle_name", regex: /middle\b|middle.?name|mid.?name|middle initial|mname/i, profileKey: "middleName" },
+  { type: "last_name", regex: /last.?name|surname|family.?name|lname/i, profileKey: "lastName" },
+  // Do NOT use a generic /\bname\b/ match; it breaks "Middle Name" fields.
+  { type: "full_name", regex: /full.?name|applicant.?name|your.?name/i, profileKey: "name" },
   { type: "email", regex: /email|e-mail/i, profileKey: "email" },
   { type: "phone", regex: /phone|mobile|tel|cell|contact.?num/i, profileKey: "phone" },
   { type: "location", regex: /location|city|address|where.?you/i, profileKey: "location" },

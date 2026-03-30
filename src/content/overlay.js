@@ -440,6 +440,11 @@ function animateScore(root, target, scoreClass) {
 }
 
 function extractFileInputLabel(el) {
+  const attachmentField = el.closest?.(".attachmentField");
+  if (attachmentField) {
+    const label = attachmentField.querySelector("label");
+    if (label?.textContent?.trim()) return label.textContent.trim();
+  }
   if (el.id) {
     const label = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
     if (label) return label.textContent.trim();

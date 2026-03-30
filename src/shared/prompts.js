@@ -43,6 +43,9 @@ Return a JSON object. Use the structure below as a GUIDE, but you MUST also:
 
 {
   "name": "",
+  "firstName": "",
+  "middleName": "",
+  "lastName": "",
   "email": "",
   "phone": "",
   "location": "",
@@ -53,6 +56,7 @@ Return a JSON object. Use the structure below as a GUIDE, but you MUST also:
   "currentTitle": "",
   "headline": "",
   "summary": "",
+  "keywords": "",
   "yearsExperience": "",
   "currentCompany": "",
   "skills": {
@@ -121,14 +125,15 @@ Return a JSON object. Use the structure below as a GUIDE, but you MUST also:
 
 Rules:
 1. Extract EVERY piece of information — miss nothing
-2. Skills categories should match what the resume uses (e.g. if resume says "Languages" and "Frameworks" use those; if it says "Technical Skills" and "Soft Skills", use those)
-3. For years of experience, calculate from earliest job start to now
-4. Keep highlight bullets concise (1 line each, max 4 per role)
-8. For experience dates: prefer "startDate" and "endDate" as ISO strings YYYY-MM-DD when a specific day is known; otherwise use "startMonth" (e.g. "April"), "startYear" (e.g. "2025"), "endMonth", "endYear". If current job, set isCurrentCompany: true, endDate: "", endMonth: "", endYear: ""
-9. For internships: also use startMonth/startYear/endMonth/endYear if dates are available, otherwise use "duration"
-5. "additionalSections" captures anything that doesn't fit the standard fields (awards, publications, volunteer work, hobbies, references, patents, speaking engagements, etc.)
-6. If certifications have issuer/year info, include it. If they're just names, put name only
-7. Return ONLY the JSON object — no wrapping text`;
+2. For the candidate name, extract firstName, middleName (optional), and lastName when available. Keep name as the full display name: firstName + (middleName if present) + lastName.
+3. Skills categories should match what the resume uses (e.g. if resume says "Languages" and "Frameworks" use those; if it says "Technical Skills" and "Soft Skills", use those)
+4. For years of experience, calculate from earliest job start to now
+5. Keep highlight bullets concise (1 line each, max 4 per role)
+9. For experience dates: prefer "startDate" and "endDate" as ISO strings YYYY-MM-DD when a specific day is known; otherwise use "startMonth" (e.g. "April"), "startYear" (e.g. "2025"), "endMonth", "endYear". If current job, set isCurrentCompany: true, endDate: "", endMonth: "", endYear: ""
+10. For internships: also use startMonth/startYear/endMonth/endYear if dates are available, otherwise use "duration"
+6. "additionalSections" captures anything that doesn't fit the standard fields (awards, publications, volunteer work, hobbies, references, patents, speaking engagements, etc.)
+7. If certifications have issuer/year info, include it. If they're just names, put name only
+8. Return ONLY the JSON object — no wrapping text`;
 }
 
 export const VALIDATION_PROMPT_MESSAGE = "Reply with exactly: OK";

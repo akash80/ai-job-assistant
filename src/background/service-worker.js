@@ -6,7 +6,7 @@ import {
   CURRENCY_RATE_STALE_MS,
   ExchangeRateError,
 } from "./exchange-rate-client.js";
-import { getCachedAnalysis, cacheAnalysis, clearCache } from "./cache-manager.js";
+import { getCachedAnalysis, getCachedAnalysisByUrl, cacheAnalysis, clearCache } from "./cache-manager.js";
 import { trackUsage, trackCacheHit, getUsageStats, getTodayStats } from "./usage-tracker.js";
 import {
   getApiConfig,
@@ -167,7 +167,19 @@ async function handleAnalyzeJob(payload) {
 
   const contentHash = await hashContent(jobText, pageUrl);
 
-  const cached = await getCachedAnalysis(contentHash);
+  let cached = await getCachedAnalysis(contentHash);
+  if (!cached && pageUrl) {
+    cached = await getCachedAnalysisByUrl(pageUrl);
+    // Write-through alias so next lookup with this hash is a direct hit.
+    if (cached) {
+      await cacheAnalysis(contentHash, cached.result, {
+        jobUrl: pageUrl,
+        jobTitle: cached.jobTitle || cached.result?.job_title || "",
+        model: cached.model || apiConfig.model,
+        tokensUsed: cached.tokensUsed || 0,
+      });
+    }
+  }
   if (cached) {
     await trackCacheHit();
     return success({ ...cached.result, cached: true });
@@ -201,15 +213,33 @@ async function handleParseResume(payload) {
   const profile = { ...result };
 
   // Ensure critical fields exist with defaults
-  profile.name = profile.name || "";
+  profile.firstName = profile.firstName || "";
+  profile.middleName = profile.middleName || "";
+  profile.lastName = profile.lastName || "";
+  profile.name = profile.name || ""; // legacy full name
   profile.email = profile.email || "";
   profile.phone = profile.phone || "";
   profile.location = profile.location || "";
+  profile.keywords = profile.keywords || "";
   profile.skills = profile.skills || {};
   profile.experience = profile.experience || [];
   profile.education = profile.education || [];
   profile.projects = profile.projects || [];
   profile.additionalSections = profile.additionalSections || {};
+
+  // If we only have legacy `name`, try to split it.
+  if ((!profile.firstName || !profile.lastName) && profile.name) {
+    const parts = profile.name.trim().split(/\s+/).filter(Boolean);
+    if (!profile.firstName) profile.firstName = parts[0] || "";
+    if (!profile.lastName) profile.lastName = parts.length > 1 ? parts[parts.length - 1] : "";
+    if (!profile.middleName && parts.length > 2) profile.middleName = parts.slice(1, -1).join(" ");
+  }
+
+  // Keep `profile.name` in sync with first/middle/last.
+  if (profile.firstName || profile.lastName) {
+    const parts = [profile.firstName, profile.middleName, profile.lastName].map((s) => (s || "").trim()).filter(Boolean);
+    profile.name = parts.join(" ").trim();
+  }
 
   // Normalize experience dates: ISO / free-text → month/year; month/year → ISO (YYYY-MM-DD) for UI
   for (const exp of profile.experience) {
@@ -299,7 +329,7 @@ async function handleParseResume(payload) {
 
 async function handleGetCached(payload) {
   const contentHash = await hashContent(payload.jobText, payload.pageUrl);
-  const cached = await getCachedAnalysis(contentHash);
+  const cached = (await getCachedAnalysis(contentHash)) || (await getCachedAnalysisByUrl(payload.pageUrl));
   return success(cached?.result || null);
 }
 
