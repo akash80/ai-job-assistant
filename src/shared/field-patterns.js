@@ -11,7 +11,14 @@ export const FIELD_PATTERNS = [
   { type: "github", regex: /github/i, profileKey: "githubUrl" },
   { type: "portfolio", regex: /portfolio|website|personal.?url|blog/i, profileKey: "portfolioUrl" },
   { type: "salary", regex: /salary|compensation|ctc|expected.?pay|desired.?pay/i, answerKey: "expected_salary" },
-  { type: "experience_years", regex: /year.?of.?exp|total.?exp|experience/i, profileKey: "yearsExperience" },
+  // Do NOT use a bare /experience/i match — Workday IDs like "workExperience-4--jobTitle" contain
+  // "experience" as a substring and would be misclassified as years-of-experience.
+  {
+    type: "experience_years",
+    regex:
+      /year(?:s)?\s+of\s+(?:work\s+)?experience|total\s+(?:work\s+)?experience|total\s+exp|years?\s+of\s+exp|how\s+many\s+years|years?\s+in\s+industry/i,
+    profileKey: "yearsExperience",
+  },
   { type: "notice_period", regex: /notice.?period|notice/i, answerKey: "notice_period" },
   { type: "start_date", regex: /start.?date|available|earliest.?date|join/i, answerKey: "start_date" },
   { type: "current_company", regex: /current.?company|present.?employer/i, profileKey: "currentCompany" },
