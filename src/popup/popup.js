@@ -71,16 +71,25 @@ async function showReady(config, resume) {
 
 async function triggerAnalysis() {
   const btn = document.getElementById("btn-analyze");
+  hideActionMessage();
   btn.disabled = true;
   btn.textContent = "Analyzing...";
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
+      const injected = await ensureContentReady(tab);
+      if (!injected) {
+        resetAnalyzeButton();
+        return;
+      }
       await chrome.tabs.sendMessage(tab.id, { type: "TRIGGER_ANALYSIS" });
     }
   } catch (err) {
     console.error("Failed to trigger analysis:", err);
+    showActionMessage("Could not start analysis on this page. Please refresh and try again.");
+    resetAnalyzeButton();
+    return;
   }
 
   setTimeout(() => window.close(), 500);
@@ -88,6 +97,7 @@ async function triggerAnalysis() {
 
 async function triggerFillForm() {
   const btn = document.getElementById("btn-fill-form");
+  hideActionMessage();
   if (btn) {
     btn.disabled = true;
     btn.textContent = "Opening...";
@@ -96,10 +106,18 @@ async function triggerFillForm() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
+      const injected = await ensureContentReady(tab);
+      if (!injected) {
+        resetFillButton();
+        return;
+      }
       await chrome.tabs.sendMessage(tab.id, { type: "TRIGGER_FILL_FORM" });
     }
   } catch (err) {
     console.error("Failed to trigger fill form:", err);
+    showActionMessage("Could not open fill assist on this page. Please refresh and try again.");
+    resetFillButton();
+    return;
   }
 
   setTimeout(() => window.close(), 500);
@@ -121,6 +139,64 @@ async function sendMsg(type, payload = {}) {
   } catch (err) {
     return { success: false, error: err.message };
   }
+}
+
+async function ensureContentReady(tab) {
+  // activeTab does not allow injecting into browser internal pages.
+  if (!isInjectableUrl(tab?.url || "")) {
+    showActionMessage("This page is restricted. Open a normal website page and try again.");
+    return false;
+  }
+
+  try {
+    await chrome.scripting.insertCSS({
+      target: { tabId: tab.id },
+      files: ["content/content.css"],
+    });
+
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["content/content.js"],
+    });
+  } catch (err) {
+    console.warn("Failed to inject content scripts:", err);
+    showActionMessage("Unable to run on this page. Try refreshing the tab first.");
+    return false;
+  }
+
+  return true;
+}
+
+function isInjectableUrl(url) {
+  return /^https?:\/\//i.test(url);
+}
+
+function showActionMessage(message) {
+  const el = document.getElementById("action-message");
+  if (!el) return;
+  el.textContent = message;
+  el.style.display = "block";
+}
+
+function hideActionMessage() {
+  const el = document.getElementById("action-message");
+  if (!el) return;
+  el.textContent = "";
+  el.style.display = "none";
+}
+
+function resetAnalyzeButton() {
+  const btn = document.getElementById("btn-analyze");
+  if (!btn) return;
+  btn.disabled = false;
+  btn.innerHTML = "<span>&#128202;</span> Analyze This Page";
+}
+
+function resetFillButton() {
+  const btn = document.getElementById("btn-fill-form");
+  if (!btn) return;
+  btn.disabled = false;
+  btn.innerHTML = "<span>&#9997;&#65039;</span> Fill Form";
 }
 
 function formatNum(n) {

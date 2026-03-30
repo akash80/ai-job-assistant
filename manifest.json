@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "AI Job Assistant",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Your AI co-pilot for job applications — analyze, match, and fill with intelligence.",
 
   "permissions": [
     "storage",
     "activeTab",
-    "alarms"
+    "alarms",
+    "scripting"
   ],
 
   "host_permissions": [
@@ -19,14 +20,6 @@
     "service_worker": "background/service-worker.js"
   },
 
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content/content.js"],
-      "css": ["content/content.css"],
-      "run_at": "document_idle"
-    }
-  ],
 
   "action": {
     "default_popup": "popup/popup.html",

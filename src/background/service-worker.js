@@ -164,6 +164,7 @@ async function handleAnalyzeJob(payload) {
   if (!resume?.rawText) {
     return error("Please add your resume in settings.", "NO_RESUME");
   }
+  const profile = await getProfile();
 
   const contentHash = await hashContent(jobText, pageUrl);
 
@@ -182,7 +183,7 @@ async function handleAnalyzeJob(payload) {
   }
   if (cached) {
     await trackCacheHit();
-    return success({ ...cached.result, cached: true });
+    return success({ ...applyProfileSkillOverrides(cached.result, profile), cached: true });
   }
 
   const { result, usage } = await analyzeJob(jobText, resume.rawText, apiConfig);
@@ -196,7 +197,53 @@ async function handleAnalyzeJob(payload) {
 
   await trackUsage(apiConfig.model, usage);
 
-  return success({ ...result, cached: false });
+  return success({ ...applyProfileSkillOverrides(result, profile), cached: false });
+}
+
+/**
+ * Keeps analysis output aligned with user-edited profile skills.
+ * If a user adds a "missing skill" to their profile, it should not reappear on next analysis.
+ */
+function applyProfileSkillOverrides(result, profile) {
+  if (!result || typeof result !== "object") return result;
+
+  const baseScore = Number(result.match_score) || 0;
+  const normalized = {
+    ...result,
+    match_score: baseScore,
+    missing_skills: Array.isArray(result.missing_skills) ? [...result.missing_skills] : [],
+  };
+  const originalMissingCount = normalized.missing_skills.length;
+
+  const knownSkills = new Set();
+  const skillsByCategory = profile?.skills && typeof profile.skills === "object" ? profile.skills : {};
+  for (const value of Object.values(skillsByCategory)) {
+    if (!Array.isArray(value)) continue;
+    for (const skill of value) {
+      const k = String(skill || "").trim().toLowerCase();
+      if (k) knownSkills.add(k);
+    }
+  }
+
+  if (knownSkills.size === 0) return normalized;
+
+  normalized.missing_skills = normalized.missing_skills.filter((skill) => {
+    const k = String(skill || "").trim().toLowerCase();
+    return k ? !knownSkills.has(k) : false;
+  });
+
+  // Keep score aligned with resolved missing skills (same model as overlay adjustment).
+  if (originalMissingCount > 0) {
+    const resolved = Math.max(0, originalMissingCount - normalized.missing_skills.length);
+    const bonus = Math.round((resolved / originalMissingCount) * 20); // up to +20
+    normalized.match_score = clampScore(baseScore + bonus);
+  }
+
+  return normalized;
+}
+
+function clampScore(n) {
+  return Math.max(0, Math.min(100, Number(n) || 0));
 }
 
 async function handleParseResume(payload) {
