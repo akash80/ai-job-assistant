@@ -4,7 +4,7 @@
 
 ### Your AI Co-Pilot for Job Applications
 
-**Analyze job postings. Match your skills. Auto-fill applications. All powered by AI.**
+**Analyze job postings. Match your skills. Assist with application responses — all powered by AI.**
 
 [![Chrome Extension](https://img.shields.io/badge/Platform-Chrome%20Extension-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-00897B?style=for-the-badge)](https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3)
@@ -14,7 +14,7 @@
 
 ---
 
-*Stop wasting hours on repetitive job applications. Let AI handle the boring parts so you can focus on what matters — landing your dream job.*
+*Stop wasting hours on repetitive job applications. Let AI assist you with repetitive parts while you stay in full control of every application. — landing your dream job.*
 
 </div>
 
@@ -26,7 +26,7 @@ AI Job Assistant is an open-source Chrome extension that acts as your intelligen
 
 - **Analyze job postings** — Extracts key requirements, skills, and qualifications from any job listing
 - **Match your profile** — Compares the job requirements against your resume/skills to show fit percentage
-- **Auto-fill applications** — Intelligently fills out job application forms with contextual, tailored responses
+- **AI-assisted form filling** — Suggests responses and helps pre-fill fields (user-triggered) based on your profile and the job context
 - **Learn your style** — Adapts over time to your writing tone and preferred answers
 
 > **Privacy-first:** All your data stays on your device. No backend servers. No tracking. No analytics. Your OpenAI API key is stored locally and calls go directly from your browser to OpenAI.
@@ -38,8 +38,8 @@ AI Job Assistant is an open-source Chrome extension that acts as your intelligen
 | Feature | Description |
 |---------|-------------|
 | **Job Analysis** | Extracts structured data from job postings on LinkedIn, Indeed, Glassdoor, and more |
-| **Smart Field Detection** | Automatically detects form fields across different job platforms |
-| **AI-Powered Autofill** | Generates contextual, tailored responses for each application field |
+| **Smart Field Detection** | Detects form fields on the page when you use Apply Assist (user-triggered) |
+| **AI-assisted responses** | Suggests contextual, tailored text for application fields you choose to fill |
 | **Skill Matching** | Shows how well your profile matches the job requirements |
 | **Overlay UI** | Non-intrusive floating panel that stays with you as you fill applications |
 | **Usage Tracking** | Monitors your API token usage to keep costs transparent |
@@ -192,9 +192,9 @@ npm run build
 
 1. **Navigate to a job posting** on LinkedIn, Indeed, Glassdoor, or any supported platform
 2. **Click the AI Job Assistant icon** — the extension analyzes the job posting and shows key details
-3. **Open the application form** — the extension detects form fields automatically
-4. **Click "Auto-fill"** on the floating overlay to let AI generate tailored responses
-5. **Review and submit** — always review AI-generated answers before submitting
+3. **Open the application form** — when you continue, the extension can help detect fields as part of Apply Assist
+4. **Click "Apply Assist"** on the floating overlay to preview fields and proceed with AI-assisted filling — use the prompter to **generate suggestions** for fields that need input
+5. **Review and edit suggestions** before submitting your application — you are always responsible for final answers
 
 ---
 
@@ -325,6 +325,27 @@ AI Job Assistant is built with a **privacy-first** approach:
 
 ---
 
+## Automation & User Control
+
+AI Job Assistant is designed as a **user-controlled assistant**, not an automation bot.
+
+- No automatic job applications are submitted
+- No actions are performed without explicit user interaction
+- Users must review and approve all AI-generated responses
+- The extension does **not** bypass CAPTCHA, OTP, or authentication systems
+
+All features are triggered manually by the user.
+
+---
+
+## Supported Platforms
+
+Works on platforms like LinkedIn, Indeed, Glassdoor, and other job portals.
+
+The extension only reads job-related content on pages you open and assists you interactively. It does not mass-submit applications, run in the background without your action, or bypass site protections or terms of service.
+
+---
+
 ## Contributing
 
 Contributions are welcome! Here's how you can help:
@@ -374,7 +395,7 @@ Contributions are welcome! Here's how you can help:
 
 | Version | Milestone |
 |---------|-----------|
-| **1.0.0** | Core extension — job analysis, field detection, AI autofill |
+| **1.0.0** | Core extension — job analysis, field detection, AI-assisted form filling |
 | **1.1.0** | Learning system — adapts to your writing style over time |
 | **1.2.0** | PDF resume upload — parse and use your resume data |
 | **1.3.0** | Cover letter generation — AI-crafted cover letters per job |

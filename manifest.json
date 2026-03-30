@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI Job Assistant",
   "version": "1.0.1",
-  "description": "Your AI co-pilot for job applications — analyze, match, and fill with intelligence.",
+  "description": "Analyze job postings, match your profile, and get AI-assisted suggestions for applications — all user-triggered.",
 
   "permissions": [
     "storage",
