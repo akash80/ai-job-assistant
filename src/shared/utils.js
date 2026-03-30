@@ -13,7 +13,11 @@ export function generateId() {
 }
 
 /**
- * Stable URL for cache keys: ignore query (utm, ref) and fragment; drop www.
+ * Stable URL for cache keys:
+ * - keep path
+ * - keep meaningful query params (job ids, etc.)
+ * - drop tracking/noise query params
+ * - drop fragment; drop leading www
  */
 export function normalizeJobPageUrl(pageUrl) {
   if (!pageUrl || typeof pageUrl !== "string") return "";
@@ -21,7 +25,28 @@ export function normalizeJobPageUrl(pageUrl) {
     const u = new URL(pageUrl);
     const host = u.hostname.replace(/^www\./i, "").toLowerCase();
     const path = u.pathname.replace(/\/+$/, "") || "/";
-    return `${host}${path.toLowerCase()}`;
+    const noiseParams = new Set([
+      "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+      "gclid", "fbclid", "msclkid", "ref", "referrer", "source", "trk",
+    ]);
+
+    const keptParams = [];
+    for (const [key, value] of u.searchParams.entries()) {
+      const k = String(key || "").toLowerCase().trim();
+      if (!k || noiseParams.has(k)) continue;
+      // Ignore obvious session/navigation-only flags.
+      if (k.startsWith("session") || k.startsWith("sid") || k.startsWith("ts")) continue;
+      keptParams.push([k, String(value || "").trim()]);
+    }
+    keptParams.sort(([a], [b]) => a.localeCompare(b));
+
+    if (keptParams.length === 0) {
+      return `${host}${path.toLowerCase()}`;
+    }
+    const query = keptParams
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join("&");
+    return `${host}${path.toLowerCase()}?${query}`;
   } catch {
     return String(pageUrl).toLowerCase().trim();
   }

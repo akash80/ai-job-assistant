@@ -18,6 +18,7 @@ async function init() {
   document.getElementById("btn-open-settings")?.addEventListener("click", openSettings);
   document.getElementById("btn-settings")?.addEventListener("click", openSettings);
   document.getElementById("btn-analyze")?.addEventListener("click", triggerAnalysis);
+  document.getElementById("btn-fill-form")?.addEventListener("click", triggerFillForm);
   document.getElementById("btn-history")?.addEventListener("click", openHistory);
 }
 
@@ -80,6 +81,25 @@ async function triggerAnalysis() {
     }
   } catch (err) {
     console.error("Failed to trigger analysis:", err);
+  }
+
+  setTimeout(() => window.close(), 500);
+}
+
+async function triggerFillForm() {
+  const btn = document.getElementById("btn-fill-form");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Opening...";
+  }
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      await chrome.tabs.sendMessage(tab.id, { type: "TRIGGER_FILL_FORM" });
+    }
+  } catch (err) {
+    console.error("Failed to trigger fill form:", err);
   }
 
   setTimeout(() => window.close(), 500);

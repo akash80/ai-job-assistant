@@ -2,7 +2,7 @@ import { sendMessage } from "../shared/utils.js";
 import { MSG } from "../shared/constants.js";
 import { extractJobText, isLikelyJobPage } from "./extractor.js";
 import { PageObserver } from "./observer.js";
-import { showLoading, showResult, showError, removeOverlay } from "./overlay.js";
+import { showLoading, showResult, showError, removeOverlay, startFillAssist } from "./overlay.js";
 
 let analyzed = false;
 
@@ -25,6 +25,9 @@ async function init() {
     if (msg.type === "TRIGGER_ANALYSIS") {
       analyzed = false;
       analyzeCurrentPage();
+      sendResponse({ success: true });
+    } else if (msg.type === "TRIGGER_FILL_FORM") {
+      startFillAssist();
       sendResponse({ success: true });
     }
     return false;

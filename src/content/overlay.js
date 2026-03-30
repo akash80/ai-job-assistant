@@ -10,6 +10,7 @@ let overlayHost = null;
 let shadowRoot = null;
 let prompterEl = null;
 let currentResult = null;
+let baselineResult = null;
 
 export function showLoading() {
   ensureOverlay();
@@ -23,8 +24,15 @@ export function showLoading() {
   show();
 }
 
-export function showResult(result) {
+export function showResult(result, options = {}) {
+  const { preserveBaseline = false } = options;
   currentResult = result;
+  if (!preserveBaseline) {
+    baselineResult = {
+      match_score: Number(result.match_score) || 0,
+      missing_skills: Array.isArray(result.missing_skills) ? [...result.missing_skills] : [],
+    };
+  }
   ensureOverlay();
   const content = shadowRoot.querySelector(".ja-content");
   const scoreClass = result.match_score >= 70 ? "high" : result.match_score >= 40 ? "medium" : "low";
@@ -96,6 +104,14 @@ export function showError(message, showRetry = true) {
     chrome.runtime.openOptionsPage?.() || window.open(chrome.runtime.getURL("options/options.html"));
   });
   show();
+}
+
+/** Start form assist directly without running page analysis first. */
+export async function startFillAssist() {
+  currentResult = null;
+  ensureOverlay();
+  show();
+  await handleApplyAssist();
 }
 
 export function removeOverlay() {
@@ -221,7 +237,10 @@ async function showPreview(plan, profile, answers) {
   `;
 
   shadowRoot.querySelector(".ja-btn-proceed").addEventListener("click", () => startFilling(plan));
-  shadowRoot.querySelector(".ja-btn-cancel").addEventListener("click", () => showResult(currentResult));
+  shadowRoot.querySelector(".ja-btn-cancel").addEventListener("click", () => {
+    if (currentResult) showResult(currentResult);
+    else removeOverlay();
+  });
 }
 
 async function startFilling(plan) {
@@ -275,12 +294,13 @@ function showFillStatus(message, isFinal) {
       <div class="ja-fill-status">
         <p>${escHtml(message)}</p>
         <div class="ja-actions">
-          <button class="ja-btn ja-btn-secondary ja-btn-back">Back to Analysis</button>
+          <button class="ja-btn ja-btn-secondary ja-btn-back">${currentResult ? "Back to Analysis" : "Close"}</button>
         </div>
       </div>
     `;
     shadowRoot.querySelector(".ja-btn-back")?.addEventListener("click", () => {
       if (currentResult) showResult(currentResult);
+      else removeOverlay();
     });
   } else {
     let statusEl = content.querySelector(".ja-fill-progress");
@@ -363,9 +383,18 @@ function setupMissingSkillActions(root) {
         await sendMessage(MSG.SAVE_PROFILE, profile);
       }
 
-      li.classList.add("ja-skill-added");
-      btn.style.display = "none";
-      li.querySelector(".ja-skill-undo").style.display = "inline-flex";
+      if (currentResult) {
+        const remaining = (currentResult.missing_skills || []).filter(
+          (s) => s.toLowerCase() !== skill.toLowerCase(),
+        );
+        currentResult.missing_skills = remaining;
+        currentResult.match_score = computeAdjustedScore();
+        showResult(currentResult, { preserveBaseline: true });
+      } else {
+        li.classList.add("ja-skill-added");
+        btn.style.display = "none";
+        li.querySelector(".ja-skill-undo").style.display = "inline-flex";
+      }
     });
   });
 
@@ -390,9 +419,19 @@ function setupMissingSkillActions(root) {
       profile.skillsText = allSkills.join(", ");
       await sendMessage(MSG.SAVE_PROFILE, profile);
 
-      li.classList.remove("ja-skill-added");
-      btn.style.display = "none";
-      li.querySelector(".ja-skill-add").style.display = "inline-flex";
+      if (currentResult && baselineResult) {
+        const baseList = baselineResult.missing_skills || [];
+        const hasInBase = baseList.some((s) => s.toLowerCase() === skill.toLowerCase());
+        if (hasInBase && !(currentResult.missing_skills || []).some((s) => s.toLowerCase() === skill.toLowerCase())) {
+          currentResult.missing_skills = [...(currentResult.missing_skills || []), skill];
+        }
+        currentResult.match_score = computeAdjustedScore();
+        showResult(currentResult, { preserveBaseline: true });
+      } else {
+        li.classList.remove("ja-skill-added");
+        btn.style.display = "none";
+        li.querySelector(".ja-skill-add").style.display = "inline-flex";
+      }
     });
   });
 }
@@ -460,4 +499,20 @@ function escHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
+}
+
+function computeAdjustedScore() {
+  const baseScore = Number(baselineResult?.match_score) || Number(currentResult?.match_score) || 0;
+  const baseMissing = Array.isArray(baselineResult?.missing_skills) ? baselineResult.missing_skills.length : 0;
+  const nowMissing = Array.isArray(currentResult?.missing_skills) ? currentResult.missing_skills.length : 0;
+
+  if (baseMissing <= 0) return clampScore(baseScore);
+
+  const resolved = Math.max(0, baseMissing - nowMissing);
+  const bonus = Math.round((resolved / baseMissing) * 20); // up to +20 for resolving all missing skills
+  return clampScore(baseScore + bonus);
+}
+
+function clampScore(n) {
+  return Math.max(0, Math.min(100, Number(n) || 0));
 }

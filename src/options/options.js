@@ -747,6 +747,14 @@ function bindCardEvents(container, section) {
       }
     });
   });
+  // Improve date picker behavior in extension pages where empty date fields
+  // can fail to open on first click in some Chromium builds.
+  container.querySelectorAll('input[type="date"]').forEach((input) => {
+    input.addEventListener("pointerdown", () => {
+      if (input.disabled || typeof input.showPicker !== "function") return;
+      try { input.showPicker(); } catch { /* no-op */ }
+    });
+  });
 }
 
 function removeItem(section, idx) {
