@@ -78,6 +78,11 @@ const RESUME_JSON_SCHEMA_BLOCK = `Return a JSON object. Use the structure below 
   "lastName": "",
   "email": "",
   "phone": "",
+  "dateOfBirth": "",
+  "addressLine1": "",
+  "addressLine2": "",
+  "city": "",
+  "postalCode": "",
   "location": "",
   "linkedinUrl": "",
   "githubUrl": "",
@@ -156,6 +161,8 @@ const RESUME_JSON_SCHEMA_BLOCK = `Return a JSON object. Use the structure below 
 function buildResumeParseRules(depth) {
   const d = normalizeResumeProfileDepth(depth);
   const nameSkillsDates = `For the candidate name, extract firstName, middleName (optional), and lastName when available. Keep name as full display name: firstName + (middleName if present) + lastName.
+When the résumé lists a street or mailing address, split it into addressLine1 (street / line 1), addressLine2 (apt/suite/unit if any), city, and postalCode (ZIP / PIN / postal code). Use "location" for a short one-line place (e.g. City, State/Country) when that is all that appears or for headline-style location.
+If date of birth appears on the résumé, set dateOfBirth as ISO YYYY-MM-DD when you can infer it reliably; otherwise use an empty string.
 Skills categories should match what the résumé uses.
 For years of experience, calculate from earliest job start to now.
 For experience dates: prefer "startDate" and "endDate" as ISO YYYY-MM-DD when known; otherwise startMonth/startYear/endMonth/endYear. Current job: isCurrentCompany: true, clear end fields.
@@ -546,6 +553,11 @@ Return ONLY a valid JSON object with this structure (fill from my résumé; use 
   "lastName": "",
   "email": "",
   "phone": "",
+  "dateOfBirth": "",
+  "addressLine1": "",
+  "addressLine2": "",
+  "city": "",
+  "postalCode": "",
   "location": "",
   "linkedinUrl": "",
   "githubUrl": "",
@@ -595,6 +607,8 @@ Return ONLY a valid JSON object with this structure (fill from my résumé; use 
 
 Rules:
 - For current jobs: set isCurrentCompany: true, endMonth: "", endYear: ""
+- Split street or mailing addresses into addressLine1, addressLine2 (if any), city, and postalCode when the résumé includes them; use "location" for a short one-line place when that is all that appears.
+- If the résumé includes date of birth, set dateOfBirth as YYYY-MM-DD when clear; otherwise "".
 - For skills: use the same categories as my résumé (e.g. "Languages", "Frameworks", "Cloud & DevOps")
 ${rulesForChat}
 - Return ONLY the JSON object, no explanation, no markdown code fences`;

@@ -295,7 +295,21 @@
           </div>
           <div class="form-row">
             <div class="form-group"><label for="p-phone">Phone</label><input type="tel" id="p-phone" class="input" placeholder="e.g. +91 9791492742" /></div>
-            <div class="form-group"><label for="p-location">Location</label><input type="text" id="p-location" class="input" placeholder="e.g. Noida, India" /></div>
+            <div class="form-group profile-spotlight" data-spotlight="dob"><label for="p-dateOfBirth">Date of birth</label><input type="date" id="p-dateOfBirth" class="input" autocomplete="bday" title="YYYY-MM-DD — often not on résumés; add if applications ask for DOB" /></div>
+          </div>
+          <p class="form-hint profile-address-hint">Street address fields are filled from your résumé when the parser finds them. Highlighted rows are still empty — add them so job forms can auto-fill.</p>
+          <div class="form-row">
+            <div class="form-group profile-spotlight" data-spotlight="address"><label for="p-addressLine1">Address Line 1</label><input type="text" id="p-addressLine1" class="input" placeholder="Street number and name" autocomplete="street-address" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label for="p-addressLine2">Address Line 2</label><input type="text" id="p-addressLine2" class="input" placeholder="Apt, suite, unit (optional)" autocomplete="address-line2" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group profile-spotlight" data-spotlight="address"><label for="p-city">City</label><input type="text" id="p-city" class="input" placeholder="e.g. Noida" autocomplete="address-level2" /></div>
+            <div class="form-group profile-spotlight" data-spotlight="address"><label for="p-postalCode">Postal Code / PIN Code</label><input type="text" id="p-postalCode" class="input" placeholder="ZIP / PIN" autocomplete="postal-code" /></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label for="p-location">Location (short)</label><input type="text" id="p-location" class="input" placeholder="e.g. Noida, India — one line for forms that only ask &quot;location&quot;" /></div>
           </div>
           <div class="form-row">
             <div class="form-group"><label for="p-linkedin">LinkedIn</label><input type="url" id="p-linkedin" class="input" placeholder="https://linkedin.com/in/..." /></div>

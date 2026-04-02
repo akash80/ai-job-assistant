@@ -1,8 +1,9 @@
 import { FIELD_SELECTORS, FILE_INPUT_SELECTOR } from "../../shared/field-patterns.js";
+import { isHoneypotTrapField } from "./field-trap.js";
 
 export function detectFields() {
   const elements = document.querySelectorAll(FIELD_SELECTORS);
-  return Array.from(elements).filter(isVisible).filter(isInteractable);
+  return Array.from(elements).filter(isVisible).filter(isInteractable).filter((el) => !isHoneypotTrapField(el));
 }
 
 export function detectFileInputs() {

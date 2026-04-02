@@ -1,4 +1,5 @@
 import { detectFields, detectFileInputs } from "./fields/detector.js";
+import { isHoneypotTrapField } from "./fields/field-trap.js";
 
 function normText(s) {
   return String(s || "").replace(/\s+/g, " ").trim();
@@ -87,6 +88,8 @@ function isNoiseField(el, hints) {
   const tag = lower(el?.tagName);
   const s = hints || getFieldHints(el);
 
+  if (isHoneypotTrapField(el)) return true;
+
   if (type === "hidden") return true;
   if (type === "search") return true;
   if (tag === "textarea" && /\bsearch\b/.test(s)) return true;
@@ -111,6 +114,7 @@ function isStrongApplicationField(el, hints) {
   if (/\bresume\b|\bcv\b|\bcover letter\b|\bportfolio\b|\blinkedin\b|\bgithub\b|\bwebsite\b/.test(s)) return true;
   if (/\bwork experience\b|\bemployment\b|\beducation\b|\buniversity\b|\bdegree\b/.test(s)) return true;
   if (/\baddress\b|\bcity\b|\bstate\b|\bzip\b|\bpostal\b|\bcountry\b/.test(s)) return true;
+  if (/\bdate\s*of\s*birth\b|\bdob\b|\bbirth\s*date\b/.test(s)) return true;
   if (/\bphone\b|\bmobile\b/.test(s)) return true;
   if (/\bsponsorship\b|\bwork authorization\b|\bvisa\b/.test(s)) return true;
   if (/\bsalary\b|\bcompensation\b|\bnotice period\b|\bavailability\b|\bstart date\b/.test(s)) return true;

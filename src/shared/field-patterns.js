@@ -6,7 +6,26 @@ export const FIELD_PATTERNS = [
   { type: "full_name", regex: /full.?name|applicant.?name|your.?name/i, profileKey: "name" },
   { type: "email", regex: /email|e-mail/i, profileKey: "email" },
   { type: "phone", regex: /phone|mobile|tel|cell|contact.?num/i, profileKey: "phone" },
-  { type: "location", regex: /location|city|address|where.?you/i, profileKey: "location" },
+  {
+    type: "date_of_birth",
+    regex: /\bdate\s*of\s*birth\b|\bd\.?o\.?b\.?\b|\bbirth\s*date\b|\bdate\s*born\b/i,
+    profileKey: "dateOfBirth",
+  },
+  {
+    type: "address_line_2",
+    regex:
+      /\baddress\s*line\s*2\b|\baddress2\b|\baddr2\b|(^|\s)apt\.?\b|\bapartment\b|\bsuite\b|\bflat\b/i,
+    profileKey: "addressLine2",
+  },
+  {
+    type: "address_line_1",
+    regex:
+      /\baddress\s*line\s*1\b|\bstreet\s*address\b|\bmailing\s*address\b|\baddress1\b|\baddr1\b|\bstreet\s*1\b|\bstreet\s*name\b/i,
+    profileKey: "addressLine1",
+  },
+  { type: "postal_code", regex: /\bpostal\b|\bzip\s*code\b|\bpin\s*code\b|\bpostcode\b|\bzip\b|\bpincode\b/i, profileKey: "postalCode" },
+  { type: "city", regex: /\bcity\b|\btown\b/i, profileKey: "city" },
+  { type: "location", regex: /\blocation\b|\bwhere.?you|city\s*\/\s*state|state\s*\/\s*city|region\b/i, profileKey: "location" },
   { type: "linkedin", regex: /linkedin/i, profileKey: "linkedinUrl" },
   { type: "github", regex: /github/i, profileKey: "githubUrl" },
   { type: "portfolio", regex: /portfolio|website|personal.?url|blog/i, profileKey: "portfolioUrl" },

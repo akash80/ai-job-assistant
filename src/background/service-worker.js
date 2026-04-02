@@ -36,6 +36,7 @@ import {
   getCachedAnalysisByPostingKey,
   cacheAnalysis,
   clearCache,
+  invalidateAnalysisCacheForJob,
 } from "./cache-manager.js";
 import { trackUsage, trackCacheHit, getUsageStats, getTodayStats } from "./usage-tracker.js";
 import {
@@ -421,34 +422,42 @@ async function handleGenerateTailoredResumePdf(payload, sender) {
 }
 
 async function handleAnalyzeJob(payload) {
-  const { jobText, pageUrl, forceLocal = false, jobIds = [] } = payload;
+  const { jobText, pageUrl, forceLocal = false, jobIds = [], forceRefresh = false } = payload;
   const apiConfig = await getApiConfig();
   const resume = await getResume();
   const profile = await getProfile();
 
   const postingKey = buildJobPostingKeyFromHints(pageUrl || "", jobIds);
 
+  if (forceRefresh) {
+    await invalidateAnalysisCacheForJob(pageUrl, postingKey);
+  }
+
   // Fast cache paths first (avoid hashing/condensing when possible).
   let cached = null;
-  if (!cached && postingKey) {
-    cached = await getCachedAnalysisByPostingKey(postingKey);
-  }
-  if (!cached && pageUrl) {
-    cached = await getCachedAnalysisByUrl(pageUrl);
-  }
-  if (cached) {
-    await trackCacheHit();
-    return success({ ...applyProfileSkillOverrides(cached.result, profile), cached: true, jobPostingKey: postingKey || null });
+  if (!forceRefresh) {
+    if (postingKey) {
+      cached = await getCachedAnalysisByPostingKey(postingKey);
+    }
+    if (!cached && pageUrl) {
+      cached = await getCachedAnalysisByUrl(pageUrl);
+    }
+    if (cached) {
+      await trackCacheHit();
+      return success({ ...applyProfileSkillOverrides(cached.result, profile), cached: true, jobPostingKey: postingKey || null });
+    }
   }
 
   // Slower cache key: hash the content (used to dedupe same posting across different URLs).
   const contentHash = await hashContent(jobText, pageUrl);
 
   // Check cache by content hash (only after the fast URL/postingKey checks).
-  cached = await getCachedAnalysis(contentHash);
-  if (cached) {
-    await trackCacheHit();
-    return success({ ...applyProfileSkillOverrides(cached.result, profile), cached: true, jobPostingKey: postingKey || null });
+  if (!forceRefresh) {
+    cached = await getCachedAnalysis(contentHash);
+    if (cached) {
+      await trackCacheHit();
+      return success({ ...applyProfileSkillOverrides(cached.result, profile), cached: true, jobPostingKey: postingKey || null });
+    }
   }
 
   // No AI providers available OR forceLocal requested → fall back to local analysis
@@ -673,6 +682,14 @@ function buildCompactResumeContext(profile, fallbackResumeRawText, maxLen) {
   return out;
 }
 
+/** Keep YYYY-MM-DD for <input type="date">; strip time from ISO datetime strings. */
+function normalizeDateOfBirthForProfile(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return iso ? iso[1] : s;
+}
+
 async function handleParseResume(payload) {
   const apiConfig = await getApiConfig();
 
@@ -698,6 +715,11 @@ async function handleParseResume(payload) {
   profile.name = profile.name || "";
   profile.email = profile.email || "";
   profile.phone = profile.phone || "";
+  profile.dateOfBirth = normalizeDateOfBirthForProfile(profile.dateOfBirth);
+  profile.addressLine1 = profile.addressLine1 || "";
+  profile.addressLine2 = profile.addressLine2 || "";
+  profile.city = profile.city || "";
+  profile.postalCode = profile.postalCode || "";
   profile.location = profile.location || "";
   profile.keywords = profile.keywords || "";
   profile.skills = profile.skills || {};
@@ -968,6 +990,11 @@ function pruneProfileForSmartFill(profile) {
     lastName: clampStr(p.lastName, 60),
     email: clampStr(p.email, 120),
     phone: clampStr(p.phone, 60),
+    dateOfBirth: clampStr(normalizeDateOfBirthForProfile(p.dateOfBirth), 32),
+    addressLine1: clampStr(p.addressLine1, 200),
+    addressLine2: clampStr(p.addressLine2, 200),
+    city: clampStr(p.city, 120),
+    postalCode: clampStr(p.postalCode, 40),
     location: clampStr(p.location, 160),
     linkedin: clampStr(p.linkedin || p.linkedIn || "", 200),
     github: clampStr(p.github || "", 200),
@@ -1015,6 +1042,8 @@ function pruneAnswersForSmartFill(answers, formSchema) {
     if (s.includes("email") || s.includes("phone") || s.includes("mobile")) return true;
     if (s.includes("linkedin") || s.includes("github") || s.includes("portfolio") || s.includes("website")) return true;
     if (s.includes("city") || s.includes("state") || s.includes("country") || s.includes("location")) return true;
+    if (s.includes("address") || s.includes("postal") || s.includes("zip") || s.includes("pin")) return true;
+    if (s.includes("birth") || s.includes("dob")) return true;
     if (s.includes("salary") || s.includes("compensation")) return true;
     if (s.includes("visa") || s.includes("sponsor") || s.includes("work_auth")) return true;
     if (s.startsWith("smart:")) return true;

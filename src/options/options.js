@@ -49,6 +49,11 @@ const PROFILE_SIMPLE_FIELDS = [
   { id: "p-lastName", key: "lastName" },
   { id: "p-email", key: "email" },
   { id: "p-phone", key: "phone" },
+  { id: "p-dateOfBirth", key: "dateOfBirth" },
+  { id: "p-addressLine1", key: "addressLine1" },
+  { id: "p-addressLine2", key: "addressLine2" },
+  { id: "p-city", key: "city" },
+  { id: "p-postalCode", key: "postalCode" },
   { id: "p-location", key: "location" },
   { id: "p-linkedin", key: "linkedinUrl" },
   { id: "p-github", key: "githubUrl" },
@@ -60,6 +65,9 @@ const PROFILE_SIMPLE_FIELDS = [
   { id: "p-keywords", key: "keywords" },
   { id: "p-summary", key: "summary" },
 ];
+
+/** Inputs that get a visible highlight when empty (common on job application forms). */
+const PROFILE_ADDRESS_SPOTLIGHT_IDS = ["p-dateOfBirth", "p-addressLine1", "p-city", "p-postalCode"];
 
 const SETUP_KEY = "completedSetup";
 
@@ -760,7 +768,14 @@ async function loadProfile() {
 
   for (const f of PROFILE_SIMPLE_FIELDS) {
     const el = document.getElementById(f.id);
-    if (el) el.value = p[f.key] || "";
+    if (!el) continue;
+    const raw = p[f.key] || "";
+    if (f.key === "dateOfBirth" && raw) {
+      const m = String(raw).trim().match(/^(\d{4}-\d{2}-\d{2})/);
+      el.value = m ? m[1] : "";
+    } else {
+      el.value = raw;
+    }
   }
 
   renderSkills(p.skills || {});
@@ -772,6 +787,17 @@ async function loadProfile() {
   renderEditableInternships(p.internships || []);
   renderEditableOpenSource(p.openSource || []);
   renderAdditionalSections(p.additionalSections || {});
+  syncProfileAddressHighlights();
+}
+
+function syncProfileAddressHighlights() {
+  for (const id of PROFILE_ADDRESS_SPOTLIGHT_IDS) {
+    const el = document.getElementById(id);
+    const group = el?.closest?.(".form-group");
+    if (!el || !group) continue;
+    const empty = !String(el.value || "").trim();
+    group.classList.toggle("profile-field-missing", empty);
+  }
 }
 
 function renderSkills(skills) {
@@ -1201,6 +1227,23 @@ async function saveProfileHandler() {
   const nameParts = [profile.firstName, profile.middleName, profile.lastName].map((s) => (s || "").trim()).filter(Boolean);
   profile.name = nameParts.join(" ").trim();
 
+  if (!(profile.location || "").trim()) {
+    const city = (profile.city || "").trim();
+    const pc = (profile.postalCode || "").trim();
+    const line1 = (profile.addressLine1 || "").trim();
+    if (city && pc) profile.location = `${city}, ${pc}`;
+    else if (city) profile.location = city;
+    else if (pc) profile.location = pc;
+    else if (line1) profile.location = line1;
+  } else {
+    profile.location = String(profile.location || "").trim();
+  }
+
+  const locInput = document.getElementById("p-location");
+  if (locInput && profile.location && !(String(locInput.value || "").trim())) {
+    locInput.value = profile.location;
+  }
+
   profile.skills = {};
   document.querySelectorAll(".skill-input").forEach((input) => {
     const key = input.dataset.skillKey;
@@ -1240,6 +1283,7 @@ async function saveProfileHandler() {
   await sendMsg(MSG.SAVE_PROFILE, profile);
   currentProfileData = profile;
   await markTabSaved("profile");
+  syncProfileAddressHighlights();
   showStatus("profile-status", "Profile saved!", "success");
 }
 
@@ -1800,6 +1844,12 @@ function bindEvents() {
     history.replaceState(null, "", "#api");
   });
   document.getElementById("btn-save-profile").addEventListener("click", saveProfileHandler);
+  document.getElementById("tab-profile")?.addEventListener("input", (e) => {
+    const t = e.target;
+    if (t?.matches?.("#p-dateOfBirth, #p-addressLine1, #p-addressLine2, #p-city, #p-postalCode, #p-location")) {
+      syncProfileAddressHighlights();
+    }
+  });
   document.getElementById("btn-save-prefs").addEventListener("click", savePrefsHandler);
   document.getElementById("pref-currency")?.addEventListener("change", onPreferenceCurrencyChange);
   document.getElementById("btn-export").addEventListener("click", exportDataHandler);

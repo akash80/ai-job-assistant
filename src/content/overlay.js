@@ -1,4 +1,4 @@
-import { generateId, sendMessage } from "../shared/utils.js";
+import { generateId, sendMessage, buildJobPostingKey } from "../shared/utils.js";
 import { MSG } from "../shared/constants.js";
 import { extractJobText, extractJobIdentity } from "./extractor.js";
 import { detectFields, detectFileInputs } from "./fields/detector.js";
@@ -279,6 +279,9 @@ export function showResult(result, options = {}) {
   const resumeBtn = shadowRoot.querySelector(".ja-btn-tailored-resume");
   if (resumeBtn) resumeBtn.addEventListener("click", () => showTailoredResumeModal());
   shadowRoot.querySelector(".ja-btn-skip").addEventListener("click", handleSkip);
+  shadowRoot.querySelector(".ja-btn-reanalyze")?.addEventListener("click", () => {
+    document.dispatchEvent(new CustomEvent("ja-reanalyze-job"));
+  });
 
   setupCollapsibles(shadowRoot);
   setupMissingSkillActions(shadowRoot);
@@ -453,8 +456,66 @@ function configurePrimaryActionButton() {
   freshBtn.addEventListener("click", () => handleApplyAssist());
 }
 
+async function resolveAnalysisForHistoryLog() {
+  if (currentResult && (currentResult.job_title || currentResult.company)) {
+    return currentResult;
+  }
+  const sessionsResp = await sendMessage(MSG.GET_JOB_SESSIONS);
+  const sessions = sessionsResp.success && Array.isArray(sessionsResp.data) ? sessionsResp.data : [];
+  if (!sessions.length) return null;
+  const url = window.location.href;
+  const postingKey = buildJobPostingKey(url);
+  if (postingKey) {
+    const m = sessions.find((s) => (s.jobPostingKey || buildJobPostingKey(s.url || "")) === postingKey);
+    if (m?.analysis && typeof m.analysis === "object") return m.analysis;
+  }
+  const withAnalysis = sessions.find((s) => s.analysis && typeof s.analysis === "object");
+  return withAnalysis?.analysis || null;
+}
+
+/** Mark History as applied when the user uses Apply or Apply Assist, unless already recorded beyond analyzed/skipped. */
+async function maybeLogAppliedWhenStartingApply() {
+  try {
+    const analysis = await resolveAnalysisForHistoryLog();
+    const jobTitle = analysis?.job_title || "";
+    const company = analysis?.company || "";
+    if (!jobTitle && !company) return;
+
+    const identity = extractJobIdentity();
+    const jobIds = Array.isArray(identity?.jobIds) ? identity.jobIds : [];
+    const url = window.location.href;
+    const domain = window.location.hostname;
+
+    const check = await sendMessage(MSG.CHECK_ALREADY_APPLIED, {
+      url,
+      company,
+      jobTitle,
+      jobIds,
+    });
+    if (check.success && check.data) return;
+
+    await sendMessage(MSG.LOG_APPLICATION, {
+      url,
+      domain,
+      jobTitle,
+      company,
+      jobIds,
+      matchScore: Number(analysis?.match_score) || 0,
+      action: "applied",
+      status: "applied",
+      recommendation: analysis?.recommendation || "",
+      fieldsAutoFilled: 0,
+      fieldsManual: 0,
+    });
+  } catch {
+    // ignore
+  }
+}
+
 async function handleClickRealApply(applyEl) {
   showFillStatus("Opening application…", false);
+
+  await maybeLogAppliedWhenStartingApply();
 
   try {
     applyEl.scrollIntoView?.({ block: "center", behavior: "smooth" });
@@ -719,6 +780,8 @@ function show() {
 }
 
 async function handleApplyAssist(applyOpts = {}) {
+  await maybeLogAppliedWhenStartingApply();
+
   const profileResp = await sendMessage(MSG.GET_PROFILE);
   const answersResp = await sendMessage(MSG.GET_ANSWERS);
   const preferencesResp = await sendMessage(MSG.GET_PREFERENCES);
@@ -1094,7 +1157,7 @@ async function startFilling(plan, preferences = {}) {
       const resumeAttached = plan.fileFields?.length > 0;
       const statusParts = [`${stats.filled} filled`, `${stats.skipped} skipped`, `${stats.errors} errors`];
       if (resumeAttached) statusParts.push("resume attached");
-      showFillStatus(`Done! ${statusParts.join(", ")}. Submit the application to mark it as applied in History.`, true);
+      showFillStatus(`Done! ${statusParts.join(", ")}. History shows Applied when you use Apply or Apply Assist, or submit this form.`, true);
     },
   }, { fillMode: preferences?.fillMode || "fast" });
 }
@@ -1365,7 +1428,8 @@ function renderGrowthOpportunities(missingSkills) {
   `;
 }
 
-function renderAppliedBanner(historyEntry) {
+function renderAppliedBanner(historyEntry, options = {}) {
+  const { showReanalyze = false } = options;
   const statusMap = {
     analyzed: "You already analyzed this job",
     applied: "You applied to this job",
@@ -1380,12 +1444,20 @@ function renderAppliedBanner(historyEntry) {
                   historyEntry.status === "rejected" ? "#fee2e2" :
                   historyEntry.status === "interviewing" ? "#fef9c3" : "#e0e7ff";
 
+  const reanalyzeBlock = showReanalyze ? `
+    <div class="ja-reanalyze-wrap">
+      <button type="button" class="ja-btn ja-btn-secondary ja-btn-reanalyze">Re-analyze</button>
+      <span class="ja-muted ja-reanalyze-hint">Fresh run replaces cached analysis and updates history for this job.</span>
+    </div>
+  ` : "";
+
   return `
     <div class="ja-applied-banner" style="background:${bgColor}">
       <span>&#128338;</span>
-      <div>
+      <div class="ja-applied-banner-body">
         <strong>${msg}</strong>${date ? ` on ${date}` : ""}
         <br><span class="ja-muted">Status: ${historyEntry.status}</span>
+        ${reanalyzeBlock}
       </div>
     </div>
   `;
@@ -1401,8 +1473,9 @@ function renderHistoryBanner(result) {
   if (!prior || !st) return "";
   if (st !== "analyzed" && st !== "skipped" && st !== "applied" && st !== "interviewing" && st !== "offer" && st !== "rejected") return "";
 
-  // If it's analyzed, show it as a gentle FYI instead of the stronger "already applied" banner.
-  return renderAppliedBanner({ ...prior, status: st });
+  // If it's analyzed or skipped, show FYI banner with optional re-analyze (replaces cache + history details).
+  const showReanalyze = st === "analyzed" || st === "skipped";
+  return renderAppliedBanner({ ...prior, status: st }, { showReanalyze });
 }
 
 function setupMissingSkillActions(root) {

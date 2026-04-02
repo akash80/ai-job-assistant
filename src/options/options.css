@@ -915,6 +915,19 @@ select.input {
   font-weight: 600;
 }
 
+.profile-address-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.profile-field-missing .input,
+.profile-field-missing textarea.input {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
 /* Parsed cards (for read-only additional sections) */
 .parsed-card {
   background: #ffffff;

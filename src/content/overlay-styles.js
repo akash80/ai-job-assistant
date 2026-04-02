@@ -732,6 +732,30 @@ export const overlayStyles = `
     flex-shrink: 0;
   }
 
+  .ja-applied-banner-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ja-reanalyze-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    margin-top: 10px;
+  }
+
+  .ja-btn-reanalyze {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .ja-reanalyze-hint {
+    font-size: 11px;
+    line-height: 1.35;
+    flex: 1 1 180px;
+  }
+
   /* Local Analysis Banner */
   .ja-local-banner {
     display: flex;

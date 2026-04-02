@@ -80,6 +80,32 @@ export async function getCachedAnalysisByPostingKey(postingKey) {
   return newest;
 }
 
+/**
+ * Remove cached analysis rows for the same job URL or posting key so a forced re-analysis
+ * cannot be shadowed by older entries on the next lookup.
+ */
+export async function invalidateAnalysisCacheForJob(pageUrl, postingKey) {
+  const normalized = normalizeJobPageUrl(pageUrl || "");
+  const pk = (postingKey || "").trim() || (normalized ? buildJobPostingKey(pageUrl) : "");
+  const cache = await getCache();
+  let mutated = false;
+
+  for (const [key, entry] of Object.entries(cache)) {
+    const entryUrl = normalizeJobPageUrl(entry.jobUrl || "");
+    const entryKey = (entry.jobPostingKey || "").trim() || buildJobPostingKey(entry.jobUrl || "");
+    const urlMatch = Boolean(normalized && entryUrl === normalized);
+    const keyMatch = Boolean(pk && entryKey && entryKey === pk);
+    if (urlMatch || keyMatch) {
+      delete cache[key];
+      mutated = true;
+    }
+  }
+
+  if (mutated) {
+    await saveCache(cache);
+  }
+}
+
 export async function cacheAnalysis(contentHash, result, meta = {}) {
   const cache = await getCache();
   const jobUrl = meta.jobUrl || "";

@@ -45,6 +45,11 @@ document.addEventListener("ja-local-analysis", () => {
   analyzeCurrentPage(true);
 });
 
+document.addEventListener("ja-reanalyze-job", () => {
+  analyzed = false;
+  analyzeCurrentPage(false, { forceRefresh: true, historyRefresh: true });
+});
+
 // When the extension is reloaded/updated, existing content scripts can keep running
 // but messaging APIs become invalid. Surface a clear instruction instead of spamming errors.
 window.addEventListener("ja-extension-context-invalidated", () => {
@@ -145,10 +150,13 @@ function pickBestJobSessionMatch(sessions) {
   return bestScore >= 2 ? best : sessions[0];
 }
 
-async function analyzeCurrentPage(forceLocal = false) {
+async function analyzeCurrentPage(forceLocal = false, opts = {}) {
   if (analyzed) return;
   if (!isLikelyJobPage()) return;
   analyzed = true;
+
+  const forceRefresh = opts && opts.forceRefresh === true;
+  const historyRefresh = opts && opts.historyRefresh === true;
 
   const extracted = extractJobTextWithMeta();
   const jobText = extracted.text;
@@ -162,6 +170,7 @@ async function analyzeCurrentPage(forceLocal = false) {
     jobText,
     pageUrl: window.location.href,
     forceLocal,
+    forceRefresh,
     jobIds: identity?.jobIds || [],
     pageTitleHints: identity?.titleCandidates || [],
     pageCompanyHints: identity?.companyCandidates || [],
@@ -210,6 +219,7 @@ async function analyzeCurrentPage(forceLocal = false) {
         recommendation: result.recommendation,
         fieldsAutoFilled: 0,
         fieldsManual: 0,
+        ...(historyRefresh ? { historyRefresh: true } : {}),
       });
     }
 

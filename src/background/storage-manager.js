@@ -352,15 +352,42 @@ function mergeHistoryDuplicates(newer, older) {
   };
 }
 
+function mergeHistoryOnReanalyze(existing, incoming) {
+  const exSt = existing.status || existing.action;
+  const incSt = incoming.status || incoming.action;
+  const preserveLifecycle = ["applied", "interviewing", "offer", "rejected"].includes(exSt);
+  return {
+    ...existing,
+    ...incoming,
+    id: existing.id,
+    timestamp: existing.timestamp,
+    status: preserveLifecycle ? exSt : (incSt || "analyzed"),
+    action: preserveLifecycle ? exSt : (incSt || "analyzed"),
+    matchScore: Number(incoming.matchScore) || Number(existing.matchScore) || 0,
+    recommendation: incoming.recommendation ?? existing.recommendation,
+    company: incoming.company ?? existing.company,
+    jobTitle: incoming.jobTitle ?? existing.jobTitle,
+    jobPostingKey: incoming.jobPostingKey || existing.jobPostingKey,
+    jobId: incoming.jobId || existing.jobId,
+    jobIds: Array.isArray(incoming.jobIds) && incoming.jobIds.length ? incoming.jobIds : existing.jobIds,
+    domain: incoming.domain || existing.domain,
+    url: incoming.url || existing.url,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export async function logApplication(entry) {
-  const raw = enrichHistoryEntry(entry);
+  const historyRefresh = entry.historyRefresh === true;
+  const entryForEnrich = { ...entry };
+  delete entryForEnrich.historyRefresh;
+  const raw = enrichHistoryEntry(entryForEnrich);
   const history = await getHistory();
   const existingIdx = findSameHistoryIndex(history, raw);
 
   if (existingIdx >= 0) {
     const existing = history[existingIdx];
     const incoming = { ...existing, ...raw, id: existing.id, timestamp: existing.timestamp };
-    const merged = mergeHistoryDuplicates(incoming, existing);
+    const merged = historyRefresh ? mergeHistoryOnReanalyze(existing, incoming) : mergeHistoryDuplicates(incoming, existing);
     merged.action = merged.status;
     history.splice(existingIdx, 1);
     history.unshift(merged);
