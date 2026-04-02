@@ -30,6 +30,13 @@ import {
   planSmartFormFillAnthropic,
   testAnthropicKey,
 } from "./anthropic-client.js";
+import {
+  analyzeJobGemini,
+  parseResumeGemini,
+  generateCoverLetterGemini,
+  planSmartFormFillGemini,
+  testGeminiKey,
+} from "./gemini-client.js";
 import { generateCoverLetterOpenAI } from "./openai-client.js";
 
 /**
@@ -40,6 +47,7 @@ export function getAvailableProviders(apiConfig) {
     openai: !!(apiConfig?.apiKey),
     perplexity: !!(apiConfig?.perplexityKey),
     anthropic: !!(apiConfig?.anthropicKey),
+    gemini: !!(apiConfig?.geminiKey),
   };
 }
 
@@ -48,7 +56,7 @@ export function getAvailableProviders(apiConfig) {
  */
 export function hasAnyProvider(apiConfig) {
   const p = getAvailableProviders(apiConfig);
-  return p.openai || p.perplexity || p.anthropic;
+  return p.openai || p.perplexity || p.anthropic || p.gemini;
 }
 
 /**
@@ -58,6 +66,7 @@ export function getAnalysisModelId(apiConfig) {
   const p = getAvailableProviders(apiConfig);
   if (p.openai) return apiConfig.model;
   if (p.anthropic) return apiConfig.anthropicModel;
+  if (p.gemini) return apiConfig.geminiModel;
   if (p.perplexity) return apiConfig.perplexityModel;
   return apiConfig.model;
 }
@@ -95,6 +104,11 @@ export async function routeAnalyzeJob(jobText, resumeText, apiConfig) {
     return analyzeJobAnthropic(jobText, resumeText, apiConfig);
   }
 
+  // Gemini next
+  if (providers.gemini) {
+    return analyzeJobGemini(jobText, resumeText, apiConfig);
+  }
+
   // Perplexity last (works but may need JSON extraction)
   if (providers.perplexity) {
     return analyzeJobPerplexity(jobText, resumeText, apiConfig);
@@ -117,6 +131,10 @@ export async function routeParseResume(resumeText, apiConfig, parseOpts = {}) {
     return parseResumeAnthropic(resumeText, apiConfig, parseOpts);
   }
 
+  if (providers.gemini) {
+    return parseResumeGemini(resumeText, apiConfig, parseOpts);
+  }
+
   if (providers.perplexity) {
     return parseResumePerplexity(resumeText, apiConfig, parseOpts);
   }
@@ -137,6 +155,10 @@ export async function routeGenerateCoverLetter(jobAnalysis, profile, tone, apiCo
 
   if (providers.anthropic) {
     return generateCoverLetterAnthropic(jobAnalysis, profile, tone, apiConfig, letterOpts);
+  }
+
+  if (providers.gemini) {
+    return generateCoverLetterGemini(jobAnalysis, profile, tone, apiConfig, letterOpts);
   }
 
   if (providers.perplexity) {
@@ -178,6 +200,10 @@ export async function routeSmartFormFill(input, apiConfig, smartOpts = {}) {
     return planSmartFormFillAnthropic(input, apiConfig, smartOpts);
   }
 
+  if (providers.gemini) {
+    return planSmartFormFillGemini(input, apiConfig, smartOpts);
+  }
+
   if (providers.perplexity) {
     return planSmartFormFillPerplexity(input, apiConfig, smartOpts);
   }
@@ -192,6 +218,7 @@ export async function routeTestKey(provider, apiConfig) {
   if (provider === "openai") return testApiKey(apiConfig);
   if (provider === "perplexity") return testPerplexityKey(apiConfig);
   if (provider === "anthropic") return testAnthropicKey(apiConfig);
+  if (provider === "gemini") return testGeminiKey(apiConfig);
   return { valid: false, error: "Unknown provider" };
 }
 

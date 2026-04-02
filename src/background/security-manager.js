@@ -109,6 +109,7 @@ export async function getSessionDecryptedKeys() {
       apiKey: String(keys.apiKey || ""),
       anthropicKey: String(keys.anthropicKey || ""),
       perplexityKey: String(keys.perplexityKey || ""),
+      geminiKey: String(keys.geminiKey || ""),
       unlockedAt: keys.unlockedAt || null,
     };
   } catch {
@@ -123,6 +124,7 @@ export async function setSessionDecryptedKeys(keys) {
       apiKey: String(keys?.apiKey || ""),
       anthropicKey: String(keys?.anthropicKey || ""),
       perplexityKey: String(keys?.perplexityKey || ""),
+      geminiKey: String(keys?.geminiKey || ""),
       unlockedAt: new Date().toISOString(),
     },
   });
@@ -162,6 +164,7 @@ export async function enableSecurityMode(passphrase, currentApiConfig) {
     apiKey: String(cfg.apiKey || ""),
     anthropicKey: String(cfg.anthropicKey || ""),
     perplexityKey: String(cfg.perplexityKey || ""),
+    geminiKey: String(cfg.geminiKey || ""),
   };
 
   const encrypted = await encryptJson(pass, keys);

@@ -1,4 +1,12 @@
-import { MSG, SUPPORTED_MODELS, ANTHROPIC_MODELS, PERPLEXITY_MODELS, DEFAULT_API_CONFIG, APPLICATION_STATUSES } from "../shared/constants.js";
+import {
+  MSG,
+  SUPPORTED_MODELS,
+  ANTHROPIC_MODELS,
+  PERPLEXITY_MODELS,
+  GEMINI_MODELS,
+  DEFAULT_API_CONFIG,
+  APPLICATION_STATUSES,
+} from "../shared/constants.js";
 import {
   buildProfileGenerationPrompt,
   normalizeResumeProfileDepth,
@@ -68,6 +76,7 @@ document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
   setupTabs();
+  setupProviderTabs();
   await loadApiConfig();
   await loadSecurityStatus();
   await loadResume();
@@ -104,6 +113,27 @@ function switchTab(tab) {
   const content = document.getElementById(`tab-${tab}`);
   if (link) link.classList.add("active");
   if (content) content.classList.add("active");
+}
+
+function setupProviderTabs() {
+  const tabs = [...document.querySelectorAll(".provider-tab")];
+  const panels = [...document.querySelectorAll(".provider-panel")];
+  if (!tabs.length || !panels.length) return;
+
+  const setActive = (providerId) => {
+    for (const t of tabs) {
+      const active = t.dataset.provider === providerId;
+      t.classList.toggle("active", active);
+      t.setAttribute("aria-selected", active ? "true" : "false");
+    }
+    for (const p of panels) {
+      p.classList.toggle("active", p.dataset.providerPanel === providerId);
+    }
+  };
+
+  tabs.forEach((btn) => {
+    btn.addEventListener("click", () => setActive(btn.dataset.provider));
+  });
 }
 
 async function updateWarningBadges() {
@@ -159,6 +189,10 @@ async function loadApiConfig() {
   const perplexityModelEl = document.getElementById("perplexity-model-select");
   if (perplexityModelEl) perplexityModelEl.value = config.perplexityModel || "sonar";
 
+  // Gemini
+  const geminiKeyEl = document.getElementById("gemini-key");
+  if (geminiKeyEl) geminiKeyEl.value = config.geminiKey || "";
+
   // Anthropic model select
   const anthropicSelect = document.getElementById("anthropic-model-select");
   if (anthropicSelect) {
@@ -178,6 +212,29 @@ async function loadApiConfig() {
     anthropicSelect.addEventListener("change", () => {
       const sel = ANTHROPIC_MODELS.find((m) => m.id === anthropicSelect.value);
       const descEl = document.getElementById("anthropic-model-desc");
+      if (descEl && sel) descEl.textContent = sel.desc;
+    });
+  }
+
+  // Gemini model select
+  const geminiSelect = document.getElementById("gemini-model-select");
+  if (geminiSelect) {
+    geminiSelect.innerHTML = "";
+    for (const m of GEMINI_MODELS) {
+      const opt = document.createElement("option");
+      opt.value = m.id;
+      opt.textContent = `${m.name} — ${m.desc}`;
+      if (m.id === (config.geminiModel || "gemini-2.5-flash")) opt.selected = true;
+      geminiSelect.appendChild(opt);
+    }
+    const descEl = document.getElementById("gemini-model-desc");
+    if (descEl) {
+      const sel = GEMINI_MODELS.find((m) => m.id === geminiSelect.value);
+      if (sel) descEl.textContent = sel.desc;
+    }
+    geminiSelect.addEventListener("change", () => {
+      const sel = GEMINI_MODELS.find((m) => m.id === geminiSelect.value);
+      const descEl = document.getElementById("gemini-model-desc");
       if (descEl && sel) descEl.textContent = sel.desc;
     });
   }
@@ -251,11 +308,13 @@ async function saveApiConfigHandler() {
   const normalizedOpenAI = document.getElementById("api-key").value.trim();
   const normalizedAnthropic = (document.getElementById("anthropic-key")?.value || "").trim();
   const normalizedPerplexity = (document.getElementById("perplexity-key")?.value || "").trim();
+  const normalizedGemini = (document.getElementById("gemini-key")?.value || "").trim();
 
   const invalid = validateApiKeys({
     openai: normalizedOpenAI,
     anthropic: normalizedAnthropic,
     perplexity: normalizedPerplexity,
+    gemini: normalizedGemini,
   });
   if (invalid.blockSave) {
     showStatus("api-status", invalid.message, "error");
@@ -276,6 +335,9 @@ async function saveApiConfigHandler() {
     // Anthropic
     anthropicKey: normalizedAnthropic,
     anthropicModel: document.getElementById("anthropic-model-select")?.value || "claude-sonnet-4-6",
+    // Gemini
+    geminiKey: normalizedGemini,
+    geminiModel: document.getElementById("gemini-model-select")?.value || "gemini-1.5-flash",
     // Perplexity
     perplexityKey: normalizedPerplexity,
     perplexityModel: document.getElementById("perplexity-model-select")?.value || "sonar",
@@ -289,17 +351,23 @@ function validateApiKeys(keys) {
   const openai = String(keys?.openai || "");
   const anthropic = String(keys?.anthropic || "");
   const perplexity = String(keys?.perplexity || "");
+  const gemini = String(keys?.gemini || "");
 
   const anyWhitespace = (s) => /\s/.test(s);
   const looksTooShort = (s) => s && s.length < 20;
 
   // Hard block: whitespace inside keys almost always indicates accidental copy/paste.
-  if ((openai && anyWhitespace(openai)) || (anthropic && anyWhitespace(anthropic)) || (perplexity && anyWhitespace(perplexity))) {
+  if (
+    (openai && anyWhitespace(openai))
+    || (anthropic && anyWhitespace(anthropic))
+    || (perplexity && anyWhitespace(perplexity))
+    || (gemini && anyWhitespace(gemini))
+  ) {
     return { blockSave: true, message: "API keys cannot contain spaces or newlines. Please paste the key again." };
   }
 
   // Soft warnings: don't block to avoid breaking non-standard key formats.
-  if (looksTooShort(openai) || looksTooShort(anthropic) || looksTooShort(perplexity)) {
+  if (looksTooShort(openai) || looksTooShort(anthropic) || looksTooShort(perplexity) || looksTooShort(gemini)) {
     return { blockSave: false, message: "One of the API keys looks unusually short. Double-check it if requests fail." };
   }
 
@@ -307,6 +375,7 @@ function validateApiKeys(keys) {
   if (openai && !/^sk-[A-Za-z0-9_\-]+$/.test(openai)) warn.push("OpenAI");
   if (anthropic && !/^sk-ant-[A-Za-z0-9_\-]+$/.test(anthropic)) warn.push("Anthropic");
   if (perplexity && !/^[A-Za-z0-9_\-]+$/.test(perplexity)) warn.push("Perplexity");
+  if (gemini && !/^[A-Za-z0-9_\-]+$/.test(gemini)) warn.push("Gemini");
   if (warn.length) {
     return { blockSave: false, message: `${warn.join(", ")} key format looks unusual. Saved anyway, but double-check if requests fail.` };
   }
@@ -372,6 +441,26 @@ async function testPerplexityKeyHandler() {
     showStatus("perplexity-test-status", "Perplexity connection successful!", "success");
   } else {
     showStatus("perplexity-test-status", `Failed: ${resp.data?.error || resp.error}`, "error");
+  }
+}
+
+async function testGeminiKeyHandler() {
+  const btn = document.getElementById("btn-test-gemini");
+  btn.disabled = true;
+  btn.textContent = "Testing...";
+  const config = {
+    geminiKey: (document.getElementById("gemini-key")?.value || "").trim(),
+    geminiModel: document.getElementById("gemini-model-select")?.value || "gemini-2.5-flash",
+    maxTokens: 5,
+    temperature: 0.3,
+  };
+  const resp = await sendMsg(MSG.TEST_GEMINI_KEY, config);
+  btn.disabled = false;
+  btn.textContent = "Test Gemini";
+  if (resp.success && resp.data?.valid) {
+    showStatus("gemini-test-status", "Gemini connection successful!", "success");
+  } else {
+    showStatus("gemini-test-status", `Failed: ${resp.data?.error || resp.error}`, "error");
   }
 }
 
@@ -541,7 +630,7 @@ async function saveResumeHandler() {
   document.getElementById("resume-date").textContent = `Last saved: ${formatDate(new Date().toISOString())}`;
 
   const apiResp = await sendMsg(MSG.GET_API_CONFIG);
-  const hasAnyKey = apiResp.success && (apiResp.data?.apiKey || apiResp.data?.anthropicKey || apiResp.data?.perplexityKey);
+  const hasAnyKey = apiResp.success && (apiResp.data?.apiKey || apiResp.data?.anthropicKey || apiResp.data?.geminiKey || apiResp.data?.perplexityKey);
   if (!hasAnyKey) {
     showStatus("resume-status", "Resume saved! No API key configured — use the prompt generator below to parse your profile.", "success");
     return;
@@ -1616,6 +1705,7 @@ function bindEvents() {
   document.getElementById("btn-test-key").addEventListener("click", testApiKeyHandler);
   document.getElementById("btn-test-anthropic")?.addEventListener("click", testAnthropicKeyHandler);
   document.getElementById("btn-test-perplexity")?.addEventListener("click", testPerplexityKeyHandler);
+  document.getElementById("btn-test-gemini")?.addEventListener("click", testGeminiKeyHandler);
   document.getElementById("btn-save-resume").addEventListener("click", saveResumeHandler);
 
   // Security mode (optional)
@@ -1636,6 +1726,10 @@ function bindEvents() {
   });
   document.getElementById("toggle-perplexity-vis")?.addEventListener("click", () => {
     const input = document.getElementById("perplexity-key");
+    if (input) input.type = input.type === "password" ? "text" : "password";
+  });
+  document.getElementById("toggle-gemini-vis")?.addEventListener("click", () => {
+    const input = document.getElementById("gemini-key");
     if (input) input.type = input.type === "password" ? "text" : "password";
   });
 

@@ -128,6 +128,7 @@ export async function getApiConfig() {
       apiKey: "",
       anthropicKey: "",
       perplexityKey: "",
+      geminiKey: "",
     };
   }
 
@@ -136,6 +137,7 @@ export async function getApiConfig() {
     apiKey: String(sessionKeys.apiKey || ""),
     anthropicKey: String(sessionKeys.anthropicKey || ""),
     perplexityKey: String(sessionKeys.perplexityKey || ""),
+    geminiKey: String(sessionKeys.geminiKey || ""),
   };
 }
 

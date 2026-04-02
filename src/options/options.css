@@ -1165,6 +1165,71 @@ select.input {
   color: #16a34a;
 }
 
+/* ─── Provider Tabs (API Configuration) ────────────────────────── */
+.provider-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 18px;
+}
+
+.provider-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms;
+}
+
+.provider-tab:hover {
+  border-color: #c7d2fe;
+  background: #fafbff;
+}
+
+.provider-tab.active {
+  background: #eef2ff;
+  border-color: #6366f1;
+  color: #4338ca;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  border: 1px solid transparent;
+}
+
+.chip-free {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.provider-panel {
+  display: none;
+}
+
+.provider-panel.active {
+  display: block;
+}
+
+.api-provider-section {
+  margin-bottom: 18px;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
 /* ─── History Filters ─────────────────────────────────────────── */
 .history-filters {
   display: flex;

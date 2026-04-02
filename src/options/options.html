@@ -35,83 +35,119 @@
         <h2>API Configuration</h2>
         <p class="tab-desc">Connect AI providers to power analysis, cover letters, and job search. <strong>The extension works without any API key</strong> using basic keyword matching.</p>
 
-        <!-- OpenAI -->
-        <div class="profile-section">
-          <h3 class="profile-section-title">OpenAI <span class="badge-provider">Best for Analysis</span></h3>
-          <div class="form-group">
-            <label for="api-key">OpenAI API Key</label>
-            <div class="input-with-action">
-              <input type="password" id="api-key" placeholder="sk-..." class="input" />
-              <button id="toggle-key-vis" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
-            </div>
-            <p class="form-hint">Stored locally. Never sent anywhere except OpenAI directly from your browser.</p>
-          </div>
-          <div class="form-group">
-            <label for="model-select">Model</label>
-            <select id="model-select" class="input"></select>
-            <p class="form-hint" id="model-desc"></p>
-            <div id="model-pricing" class="model-pricing"></div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="temperature">Temperature</label>
-              <input type="number" id="temperature" class="input" min="0" max="1" step="0.1" value="0.3" />
-            </div>
-            <div class="form-group">
-              <label for="max-tokens">Max Tokens</label>
-              <input type="number" id="max-tokens" class="input" min="100" max="4000" step="100" value="1000" />
-            </div>
-          </div>
-          <div class="form-actions">
-            <button id="btn-test-key" class="btn btn-secondary">Test OpenAI</button>
-          </div>
-          <div id="openai-test-status" class="status-msg" style="display:none"></div>
+        <div class="provider-tabs" role="tablist" aria-label="AI providers">
+          <button class="provider-tab active" data-provider="openai" type="button" role="tab" aria-selected="true">OpenAI</button>
+          <button class="provider-tab" data-provider="anthropic" type="button" role="tab" aria-selected="false">Anthropic</button>
+          <button class="provider-tab" data-provider="gemini" type="button" role="tab" aria-selected="false">Gemini <span class="chip chip-free">Free tier</span></button>
+          <button class="provider-tab" data-provider="perplexity" type="button" role="tab" aria-selected="false">Perplexity</button>
         </div>
 
-        <!-- Anthropic -->
-        <div class="profile-section">
-          <h3 class="profile-section-title">Anthropic Claude <span class="badge-provider">Best for Writing</span></h3>
-          <div class="form-group">
-            <label for="anthropic-key">Anthropic API Key</label>
-            <div class="input-with-action">
-              <input type="password" id="anthropic-key" placeholder="sk-ant-..." class="input" />
-              <button id="toggle-anthropic-vis" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
+        <div class="provider-panel active" data-provider-panel="openai" role="tabpanel">
+          <div class="profile-section api-provider-section">
+            <h3 class="profile-section-title">OpenAI <span class="badge-provider">Best for Analysis</span></h3>
+            <div class="form-group">
+              <label for="api-key">OpenAI API Key</label>
+              <div class="input-with-action">
+                <input type="password" id="api-key" placeholder="sk-..." class="input" />
+                <button id="toggle-key-vis" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
+              </div>
+              <p class="form-hint">Stored locally. Never sent anywhere except OpenAI directly from your browser.</p>
             </div>
-            <p class="form-hint">Used for job analysis and cover letter generation. Excellent at writing quality.</p>
+            <div class="form-group">
+              <label for="model-select">Model</label>
+              <select id="model-select" class="input"></select>
+              <p class="form-hint" id="model-desc"></p>
+              <div id="model-pricing" class="model-pricing"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="temperature">Temperature</label>
+                <input type="number" id="temperature" class="input" min="0" max="1" step="0.1" value="0.3" />
+              </div>
+              <div class="form-group">
+                <label for="max-tokens">Max Tokens</label>
+                <input type="number" id="max-tokens" class="input" min="100" max="4000" step="100" value="1000" />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button id="btn-test-key" class="btn btn-secondary">Test OpenAI</button>
+            </div>
+            <div id="openai-test-status" class="status-msg" style="display:none"></div>
           </div>
-          <div class="form-group">
-            <label for="anthropic-model-select">Claude Model</label>
-            <select id="anthropic-model-select" class="input"></select>
-            <p class="form-hint" id="anthropic-model-desc"></p>
-          </div>
-          <div class="form-actions">
-            <button id="btn-test-anthropic" class="btn btn-secondary">Test Anthropic</button>
-          </div>
-          <div id="anthropic-test-status" class="status-msg" style="display:none"></div>
         </div>
 
-        <!-- Perplexity -->
-        <div class="profile-section">
-          <h3 class="profile-section-title">Perplexity <span class="badge-provider badge-perplexity">Best for Job Search</span></h3>
-          <div class="form-group">
-            <label for="perplexity-key">Perplexity API Key</label>
-            <div class="input-with-action">
-              <input type="password" id="perplexity-key" placeholder="pplx-..." class="input" />
-              <button id="toggle-perplexity-vis" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
+        <div class="provider-panel" data-provider-panel="anthropic" role="tabpanel">
+          <div class="profile-section api-provider-section">
+            <h3 class="profile-section-title">Anthropic Claude <span class="badge-provider">Best for Writing</span></h3>
+            <div class="form-group">
+              <label for="anthropic-key">Anthropic API Key</label>
+              <div class="input-with-action">
+                <input type="password" id="anthropic-key" placeholder="sk-ant-..." class="input" />
+                <button id="toggle-anthropic-vis" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
+              </div>
+              <p class="form-hint">Used for job analysis and cover letter generation. Excellent at writing quality.</p>
             </div>
-            <p class="form-hint">Powers the <strong>Find Jobs</strong> feature with real-time web search. Not required for other features.</p>
+            <div class="form-group">
+              <label for="anthropic-model-select">Claude Model</label>
+              <select id="anthropic-model-select" class="input"></select>
+              <p class="form-hint" id="anthropic-model-desc"></p>
+            </div>
+            <div class="form-actions">
+              <button id="btn-test-anthropic" class="btn btn-secondary">Test Anthropic</button>
+            </div>
+            <div id="anthropic-test-status" class="status-msg" style="display:none"></div>
           </div>
-          <div class="form-group">
-            <label for="perplexity-model-select">Perplexity Model</label>
-            <select id="perplexity-model-select" class="input">
-              <option value="sonar-pro">Sonar Pro — Best results, real-time search</option>
-              <option value="sonar">Sonar — Fast and affordable</option>
-            </select>
+        </div>
+
+        <div class="provider-panel" data-provider-panel="gemini" role="tabpanel">
+          <div class="profile-section api-provider-section">
+            <h3 class="profile-section-title">Google Gemini <span class="badge-provider">Great free option</span></h3>
+            <div class="form-group">
+              <label for="gemini-key">Gemini API Key</label>
+              <div class="input-with-action">
+                <input type="password" id="gemini-key" placeholder="AIza..." class="input" />
+                <button id="toggle-gemini-vis" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
+              </div>
+              <p class="form-hint">
+                Get a free key from Google AI Studio and use it for resume parsing, job analysis, cover letters, and Smart Fill planning.
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="link-inline">Create key</a>
+              </p>
+            </div>
+            <div class="form-group">
+              <label for="gemini-model-select">Gemini Model</label>
+              <select id="gemini-model-select" class="input"></select>
+              <p class="form-hint" id="gemini-model-desc"></p>
+            </div>
+            <div class="form-actions">
+              <button id="btn-test-gemini" class="btn btn-secondary">Test Gemini</button>
+            </div>
+            <div id="gemini-test-status" class="status-msg" style="display:none"></div>
           </div>
-          <div class="form-actions">
-            <button id="btn-test-perplexity" class="btn btn-secondary">Test Perplexity</button>
+        </div>
+
+        <div class="provider-panel" data-provider-panel="perplexity" role="tabpanel">
+          <div class="profile-section api-provider-section">
+            <h3 class="profile-section-title">Perplexity <span class="badge-provider badge-perplexity">Best for Job Search</span></h3>
+            <div class="form-group">
+              <label for="perplexity-key">Perplexity API Key</label>
+              <div class="input-with-action">
+                <input type="password" id="perplexity-key" placeholder="pplx-..." class="input" />
+                <button id="toggle-perplexity-vis" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
+              </div>
+              <p class="form-hint">Powers the <strong>Find Jobs</strong> feature with real-time web search. Not required for other features.</p>
+            </div>
+            <div class="form-group">
+              <label for="perplexity-model-select">Perplexity Model</label>
+              <select id="perplexity-model-select" class="input">
+                <option value="sonar-pro">Sonar Pro — Best results, real-time search</option>
+                <option value="sonar">Sonar — Fast and affordable</option>
+              </select>
+            </div>
+            <div class="form-actions">
+              <button id="btn-test-perplexity" class="btn btn-secondary">Test Perplexity</button>
+            </div>
+            <div id="perplexity-test-status" class="status-msg" style="display:none"></div>
           </div>
-          <div id="perplexity-test-status" class="status-msg" style="display:none"></div>
         </div>
 
         <div class="form-actions">

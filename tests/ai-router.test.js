@@ -7,16 +7,18 @@ describe("background/ai-router", () => {
 
   test("getAvailableProviders reflects configured keys", async () => {
     const { getAvailableProviders } = await import("../src/background/ai-router.js");
-    expect(getAvailableProviders({ apiKey: "x" })).toEqual({ openai: true, perplexity: false, anthropic: false });
-    expect(getAvailableProviders({ perplexityKey: "p" })).toEqual({ openai: false, perplexity: true, anthropic: false });
-    expect(getAvailableProviders({ anthropicKey: "a" })).toEqual({ openai: false, perplexity: false, anthropic: true });
-    expect(getAvailableProviders({ apiKey: "x", perplexityKey: "p", anthropicKey: "a" })).toEqual({ openai: true, perplexity: true, anthropic: true });
+    expect(getAvailableProviders({ apiKey: "x" })).toEqual({ openai: true, perplexity: false, anthropic: false, gemini: false });
+    expect(getAvailableProviders({ perplexityKey: "p" })).toEqual({ openai: false, perplexity: true, anthropic: false, gemini: false });
+    expect(getAvailableProviders({ anthropicKey: "a" })).toEqual({ openai: false, perplexity: false, anthropic: true, gemini: false });
+    expect(getAvailableProviders({ geminiKey: "g" })).toEqual({ openai: false, perplexity: false, anthropic: false, gemini: true });
+    expect(getAvailableProviders({ apiKey: "x", perplexityKey: "p", anthropicKey: "a", geminiKey: "g" })).toEqual({ openai: true, perplexity: true, anthropic: true, gemini: true });
   });
 
   test("getAnalysisModelId reflects provider preference order", async () => {
     const { getAnalysisModelId } = await import("../src/background/ai-router.js");
-    expect(getAnalysisModelId({ apiKey: "k", model: "m1", anthropicKey: "a", anthropicModel: "m2", perplexityKey: "p", perplexityModel: "m3" })).toBe("m1");
-    expect(getAnalysisModelId({ anthropicKey: "a", anthropicModel: "m2", perplexityKey: "p", perplexityModel: "m3", model: "fallback" })).toBe("m2");
+    expect(getAnalysisModelId({ apiKey: "k", model: "m1", anthropicKey: "a", anthropicModel: "m2", geminiKey: "g", geminiModel: "m4", perplexityKey: "p", perplexityModel: "m3" })).toBe("m1");
+    expect(getAnalysisModelId({ anthropicKey: "a", anthropicModel: "m2", geminiKey: "g", geminiModel: "m4", perplexityKey: "p", perplexityModel: "m3", model: "fallback" })).toBe("m2");
+    expect(getAnalysisModelId({ geminiKey: "g", geminiModel: "m4", perplexityKey: "p", perplexityModel: "m3", model: "fallback" })).toBe("m4");
     expect(getAnalysisModelId({ perplexityKey: "p", perplexityModel: "m3", model: "fallback" })).toBe("m3");
   });
 

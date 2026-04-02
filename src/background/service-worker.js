@@ -3,6 +3,7 @@ import { hashContent, hashString, monthYearToIsoDate, buildJobPostingKeyFromHint
 import { testApiKey } from "./openai-client.js";
 import { testPerplexityKey } from "./perplexity-client.js";
 import { testAnthropicKey } from "./anthropic-client.js";
+import { testGeminiKey } from "./gemini-client.js";
 import {
   getSecurityStatus,
   enableSecurityMode,
@@ -119,6 +120,9 @@ async function handleMessage(message, sender) {
       case MSG.TEST_ANTHROPIC_KEY:
         return await handleTestAnthropicKey(payload);
 
+      case MSG.TEST_GEMINI_KEY:
+        return await handleTestGeminiKey(payload);
+
       case MSG.GET_API_CONFIG:
         return success(await getApiConfig());
 
@@ -127,15 +131,18 @@ async function handleMessage(message, sender) {
         const hasOpenAIKey = !!(cfg?.apiKey);
         const hasAnthropicKey = !!(cfg?.anthropicKey);
         const hasPerplexityKey = !!(cfg?.perplexityKey);
+        const hasGeminiKey = !!(cfg?.geminiKey);
         const sec = await getSecurityStatus();
         return success({
           hasOpenAIKey,
           hasAnthropicKey,
           hasPerplexityKey,
-          hasAnyKey: hasOpenAIKey || hasAnthropicKey || hasPerplexityKey,
+          hasGeminiKey,
+          hasAnyKey: hasOpenAIKey || hasAnthropicKey || hasPerplexityKey || hasGeminiKey,
           openaiModel: cfg?.model || null,
           anthropicModel: cfg?.anthropicModel || null,
           perplexityModel: cfg?.perplexityModel || null,
+          geminiModel: cfg?.geminiModel || null,
           securityEnabled: sec.enabled,
           securityLocked: sec.enabled ? sec.locked : false,
         });
@@ -152,6 +159,7 @@ async function handleMessage(message, sender) {
           apiKey: "",
           anthropicKey: "",
           perplexityKey: "",
+          geminiKey: "",
         });
         return success({ enabled: true });
       }
@@ -171,6 +179,7 @@ async function handleMessage(message, sender) {
             apiKey: String(out.keys.apiKey || ""),
             anthropicKey: String(out.keys.anthropicKey || ""),
             perplexityKey: String(out.keys.perplexityKey || ""),
+            geminiKey: String(out.keys.geminiKey || ""),
           });
         }
         return success(out);
@@ -727,6 +736,12 @@ async function handleTestPerplexityKey(payload) {
 async function handleTestAnthropicKey(payload) {
   const config = payload.anthropicKey ? payload : await getApiConfig();
   const result = await testAnthropicKey(config);
+  return success(result);
+}
+
+async function handleTestGeminiKey(payload) {
+  const config = payload.geminiKey ? payload : await getApiConfig();
+  const result = await testGeminiKey(config);
   return success(result);
 }
 

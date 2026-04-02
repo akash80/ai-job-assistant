@@ -258,7 +258,7 @@ npm run build
 **6. Configure API keys (optional)**
 
 1. Click the extension icon and go to **Settings** (or right-click the icon and select **Options**)
-2. Under **API Configuration**, add keys for the providers you use (OpenAI, Anthropic, and/or Perplexity)
+2. Under **API Configuration**, add keys for the providers you use (OpenAI, Anthropic, **Gemini**, and/or Perplexity)
 3. Without any key, you can still use **local job analysis** once resume or profile skills are set up
 4. Save settings — you're ready to go
 
@@ -293,8 +293,30 @@ Tip: if a site is “fussy” (custom widgets, heavy validation), try **Fast** f
 **1) Do I need an API key to use AI Job Assistant?**  
 No. You can use **basic local job analysis** without any key. For best results (analysis, resume parsing, cover letters), add **OpenAI** or **Anthropic**. For **Find Jobs**, you need a **Perplexity** key.
 
+**How to get API keys (quick guide)**
+
+- **Gemini (Google AI Studio) — free tier available**
+  - Go to `https://aistudio.google.com/app/apikey`
+  - Click **Create API key**
+  - Copy the key and paste it into **Settings → API Configuration → Gemini**
+
+- **OpenAI**
+  - Go to `https://platform.openai.com/api-keys`
+  - Create a new secret key
+  - Copy the key and paste it into **Settings → API Configuration → OpenAI**
+
+- **Anthropic (Claude)**
+  - Go to `https://console.anthropic.com/settings/keys`
+  - Create a key
+  - Copy the key and paste it into **Settings → API Configuration → Anthropic**
+
+- **Perplexity**
+  - Go to `https://www.perplexity.ai/settings/api`
+  - Create/copy an API key
+  - Paste it into **Settings → API Configuration → Perplexity** (required for **Find Jobs**)
+
 **2) Which AI provider is best for job analysis?**  
-In v1.1.0, job analysis prefers **OpenAI** first, then **Anthropic**, then **Perplexity** (if it’s the only provider configured). OpenAI tends to produce the most consistent structured JSON for scoring and missing skills.
+In v1.1.0, job analysis prefers **OpenAI** first, then **Anthropic**, then **Gemini**, then **Perplexity** (if it’s the only provider configured). OpenAI tends to produce the most consistent structured JSON for scoring and missing skills.
 
 **3) Which AI provider is best for cover letters?**  
 Cover letters route to **OpenAI** or **Anthropic** when available. Many users prefer Claude for writing style, while OpenAI is often more concise and structured.

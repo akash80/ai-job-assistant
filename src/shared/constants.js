@@ -36,6 +36,7 @@ export const MSG = {
   TEST_API_KEY: "TEST_API_KEY",
   TEST_PERPLEXITY_KEY: "TEST_PERPLEXITY_KEY",
   TEST_ANTHROPIC_KEY: "TEST_ANTHROPIC_KEY",
+  TEST_GEMINI_KEY: "TEST_GEMINI_KEY",
 
   LOG_APPLICATION: "LOG_APPLICATION",
   GET_HISTORY: "GET_HISTORY",
@@ -113,6 +114,9 @@ export const DEFAULT_API_CONFIG = {
   // Anthropic
   anthropicKey: "",
   anthropicModel: "claude-sonnet-4-6",
+  // Gemini (Google AI Studio)
+  geminiKey: "",
+  geminiModel: "gemini-2.5-flash",
 };
 
 export const SUPPORTED_MODELS = [
@@ -142,8 +146,16 @@ export const PERPLEXITY_MODELS = [
   { id: "sonar",      name: "Sonar",       input: 0.001, output: 0.001, desc: "Fast and affordable real-time search", provider: "perplexity" },
 ];
 
+export const GEMINI_MODELS = [
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", input: 0.0, output: 0.0, desc: "Newest fast model (recommended when available).", provider: "gemini" },
+  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", input: 0.0, output: 0.0, desc: "Newest quality model (recommended when available).", provider: "gemini" },
+  { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", input: 0.0, output: 0.0, desc: "Older fast model (may be unavailable for new users).", provider: "gemini" },
+  { id: "gemini-1.5-flash-001", name: "Gemini 1.5 Flash", input: 0.0, output: 0.0, desc: "Fast + free-tier friendly (versioned id).", provider: "gemini" },
+  { id: "gemini-1.5-pro-001", name: "Gemini 1.5 Pro", input: 0.0, output: 0.0, desc: "Higher quality (versioned id).", provider: "gemini" },
+];
+
 export const COST_PER_1K_TOKENS = Object.fromEntries(
-  [...SUPPORTED_MODELS, ...ANTHROPIC_MODELS, ...PERPLEXITY_MODELS].map((m) => [
+  [...SUPPORTED_MODELS, ...ANTHROPIC_MODELS, ...PERPLEXITY_MODELS, ...GEMINI_MODELS].map((m) => [
     m.id,
     { prompt: m.input, completion: m.output },
   ]),

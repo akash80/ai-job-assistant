@@ -58,7 +58,7 @@ async function showReady(status, resume) {
   document.getElementById("status-api").textContent = apiLabel;
 
   // Show the OpenAI model if configured; otherwise show a generic ready state.
-  document.getElementById("status-model").textContent = status?.openaiModel || status?.anthropicModel || status?.perplexityModel || "Configured";
+  document.getElementById("status-model").textContent = status?.openaiModel || status?.anthropicModel || status?.geminiModel || status?.perplexityModel || "Configured";
   document.getElementById("status-resume").textContent = resume ? "Uploaded" : "Missing";
 
   const dotResume = document.getElementById("dot-resume");
