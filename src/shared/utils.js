@@ -52,6 +52,104 @@ export function normalizeJobPageUrl(pageUrl) {
   }
 }
 
+/** Lowercase company/title for stable history matching. */
+export function normalizeCompanyTitleKey(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Best-effort job posting id from URL (LinkedIn, Indeed, Greenhouse, Lever, Ashby, etc.).
+ * Empty string when unknown — callers should fall back to normalizeJobPageUrl.
+ */
+export function extractJobIdFromUrl(pageUrl) {
+  if (!pageUrl || typeof pageUrl !== "string") return "";
+  try {
+    const u = new URL(pageUrl);
+    const host = u.hostname.replace(/^www\./i, "").toLowerCase();
+
+    const liPath = u.pathname.match(/\/jobs\/view\/(\d{6,})/i);
+    if (host.includes("linkedin.com") && liPath) return liPath[1];
+
+    const cj =
+      u.searchParams.get("currentJobId") ||
+      u.searchParams.get("jobId") ||
+      u.searchParams.get("job_id");
+    if (host.includes("linkedin.com") && cj) {
+      const digits = String(cj).replace(/\D/g, "");
+      return digits.length >= 6 ? digits : String(cj).trim();
+    }
+
+    const jk = u.searchParams.get("jk");
+    if (host.includes("indeed.") && jk) return String(jk).trim();
+
+    const gh = u.pathname.match(/\/jobs\/(\d{5,})/);
+    if ((host.includes("greenhouse.io") || host.includes("grnh.se")) && gh) return gh[1];
+
+    if (host.includes("myworkdayjobs.com") || host.includes("wd5.myworkday.com")) {
+      const wd = u.pathname.match(/\/job\/([^/]+)\/([^/?]+)/i);
+      if (wd) return `${wd[1]}/${wd[2]}`.toLowerCase();
+    }
+
+    const lev = u.pathname.match(/\/([a-z0-9][-a-z0-9]+)\/?$/i);
+    if (host.includes("jobs.lever.co") && lev && lev[1] && !/^jobs$/i.test(lev[1])) return lev[1];
+
+    const ash = u.pathname.match(/\/jobs\/([a-f0-9-]{8,})/i);
+    if (host.includes("ashbyhq.com") && ash) return ash[1];
+
+    const smart = u.pathname.match(/\/(req|requisition|position)\/([a-z0-9-]+)/i);
+    if (smart) return smart[2];
+
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * One key per job posting for cache + history dedupe: host + platform job id, or normalized URL.
+ */
+export function buildJobPostingKey(pageUrl) {
+  if (!pageUrl || typeof pageUrl !== "string") return "";
+  try {
+    const u = new URL(pageUrl);
+    const host = u.hostname.replace(/^www\./i, "").toLowerCase();
+    const jid = extractJobIdFromUrl(pageUrl);
+    if (jid) return `${host}|id:${jid}`;
+    const norm = normalizeJobPageUrl(pageUrl);
+    return norm ? `url:${norm}` : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Prefer explicit job IDs (from DOM/text) over URL parsing when available.
+ * This reduces over-reliance on URL structure (apply pages often have different URLs).
+ */
+export function buildJobPostingKeyFromHints(pageUrl, jobIds = []) {
+  const ids = Array.isArray(jobIds) ? jobIds : [];
+  const best = ids
+    .map((x) => String(x || "").trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)[0];
+
+  if (best && pageUrl) {
+    try {
+      const u = new URL(pageUrl);
+      const host = u.hostname.replace(/^www\./i, "").toLowerCase();
+      return `${host}|id:${best}`;
+    } catch {
+      // fall back below
+    }
+  }
+
+  return buildJobPostingKey(pageUrl);
+}
+
 /** Patterns that change on every refresh but are not part of the job posting. */
 const CACHE_NOISE_PATTERNS = [
   /\b\d+\s*(second|minute|hour|day|week|month|year)s?\s+ago\b/gi,
@@ -89,6 +187,18 @@ export async function hashContent(text, pageUrl = "") {
   const combined = urlNorm ? `${urlNorm}\n${textNorm}` : textNorm;
   const encoder = new TextEncoder();
   const data = encoder.encode(combined);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Hash an arbitrary string for stable cache keys (SHA-256 hex).
+ */
+export async function hashString(str) {
+  const s = String(str || "");
+  const encoder = new TextEncoder();
+  const data = encoder.encode(s);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -159,10 +269,59 @@ export function extractDomain(url) {
 }
 
 export async function sendMessage(type, payload = {}) {
+  const maxRetries = 2;
+  const baseDelayMs = 200;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      // In MV3, this returns a promise when no callback is provided.
+      return await chrome.runtime.sendMessage({ type, payload });
+    } catch (err) {
+      const msg = String(err?.message || err || "");
+
+      if (isExtensionContextInvalidatedError(msg)) {
+        notifyExtensionContextInvalidated(type);
+        console.warn(`Message ${type} failed: extension context invalidated.`);
+        return { success: false, error: "Extension context invalidated. Please refresh the page.", code: "CONTEXT_INVALIDATED" };
+      }
+
+      if (attempt < maxRetries && isRetryableMessagingError(msg)) {
+        await sleep(baseDelayMs * Math.pow(2, attempt));
+        continue;
+      }
+
+      console.error(`Message ${type} failed:`, err);
+      return { success: false, error: msg || "Message failed", code: "MESSAGE_ERROR" };
+    }
+  }
+
+  return { success: false, error: "Message failed", code: "MESSAGE_ERROR" };
+}
+
+function isExtensionContextInvalidatedError(message) {
+  const m = String(message || "").toLowerCase();
+  return m.includes("extension context invalidated") || m.includes("context invalidated");
+}
+
+function isRetryableMessagingError(message) {
+  const m = String(message || "").toLowerCase();
+  return (
+    m.includes("could not establish connection") ||
+    m.includes("receiving end does not exist") ||
+    m.includes("the message port closed") ||
+    m.includes("message port closed") ||
+    m.includes("disconnected port")
+  );
+}
+
+let contextInvalidationNotified = false;
+function notifyExtensionContextInvalidated(failedType) {
+  if (contextInvalidationNotified) return;
+  contextInvalidationNotified = true;
+
   try {
-    return await chrome.runtime.sendMessage({ type, payload });
-  } catch (err) {
-    console.error(`Message ${type} failed:`, err);
-    return { success: false, error: err.message, code: "MESSAGE_ERROR" };
+    window.dispatchEvent(new CustomEvent("ja-extension-context-invalidated", { detail: { failedType } }));
+  } catch {
+    // ignore
   }
 }

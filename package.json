@@ -1,19 +1,25 @@
 {
   "name": "ai-job-assistant",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI co-pilot for job applications — Chrome Extension",
   "scripts": {
     "dev": "webpack --mode development --watch",
     "build": "webpack --mode production",
-    "test": "jest",
-    "test:watch": "jest --watch",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --coverage",
+    "test:ci": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --ci --runInBand --coverage",
     "lint": "eslint src/",
     "format": "prettier --write \"src/**/*.{js,css,html}\""
   },
   "private": true,
   "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/preset-env": "^7.29.2",
+    "babel-jest": "^30.3.0",
     "copy-webpack-plugin": "^14.0.0",
     "css-loader": "^7.1.4",
+    "dotenv": "^17.4.0",
     "eslint": "^10.1.0",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
@@ -22,5 +28,8 @@
     "sharp": "^0.34.5",
     "webpack": "^5.105.4",
     "webpack-cli": "^7.0.2"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.10.38"
   }
 }

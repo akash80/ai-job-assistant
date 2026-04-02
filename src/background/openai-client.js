@@ -1,8 +1,14 @@
 import {
   SYSTEM_PROMPT,
   buildAnalysisPrompt,
-  RESUME_PARSE_SYSTEM,
+  buildResumeParseSystem,
   buildResumeParsePrompt,
+  getParseResumeMaxTokens,
+  normalizeResumeProfileDepth,
+  buildCoverLetterPrompt,
+  buildSmartCoverLetterPrompt,
+  buildSmartFillSystem,
+  buildSmartFillPrompt,
   VALIDATION_PROMPT_MESSAGE,
 } from "../shared/prompts.js";
 import { MAX_JOB_TEXT_LENGTH } from "../shared/constants.js";
@@ -28,18 +34,34 @@ export async function analyzeJob(jobText, resumeText, apiConfig) {
   };
 }
 
-export async function parseResume(resumeText, apiConfig) {
+export async function parseResume(resumeText, apiConfig, parseOpts = {}) {
+  const depth = normalizeResumeProfileDepth(parseOpts.depth);
+  const maxTokens = getParseResumeMaxTokens(depth);
   const response = await callOpenAI(
     [
-      { role: "system", content: RESUME_PARSE_SYSTEM },
-      { role: "user", content: buildResumeParsePrompt(resumeText) },
+      { role: "system", content: buildResumeParseSystem(depth) },
+      { role: "user", content: buildResumeParsePrompt(resumeText, depth) },
     ],
-    { ...apiConfig, maxTokens: 3000 },
+    { ...apiConfig, maxTokens },
     { response_format: { type: "json_object" } },
   );
 
   const parsed = JSON.parse(response.content);
   return { result: parsed, usage: response.usage };
+}
+
+export async function generateCoverLetterOpenAI(jobAnalysis, profile, tone, apiConfig, letterOpts = {}) {
+  const smart = letterOpts.smart === true;
+  const jobPostingText = letterOpts.jobPostingText || "";
+  const userContent = smart
+    ? buildSmartCoverLetterPrompt(jobAnalysis, profile, tone, jobPostingText)
+    : buildCoverLetterPrompt(jobAnalysis, profile, tone);
+  const maxTokens = smart ? 2800 : 1500;
+  const response = await callOpenAI(
+    [{ role: "user", content: userContent }],
+    { ...apiConfig, maxTokens },
+  );
+  return { result: response.content.trim(), usage: response.usage };
 }
 
 export async function testApiKey(apiConfig) {
@@ -54,6 +76,48 @@ export async function testApiKey(apiConfig) {
   }
 }
 
+export async function planSmartFormFillOpenAI(input, apiConfig, smartOpts = {}) {
+  const system = buildSmartFillSystem({ allowGeneration: smartOpts.allowGeneration !== false });
+  const user = buildSmartFillPrompt(input);
+  const response = await callOpenAI(
+    [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    { ...apiConfig, maxTokens: Math.max(1200, Number(apiConfig?.maxTokens || 1000)) },
+    { response_format: { type: "json_object" } },
+  );
+  const parsed = JSON.parse(response.content);
+  return { result: parsed, usage: response.usage };
+}
+
+function modelPrefersMaxCompletionTokens(modelId) {
+  // OpenAI reasoning models reject `max_tokens` on Chat Completions and require `max_completion_tokens`.
+  // Keep this conservative: prefer the newer param for "o*" models, and rely on server-error fallback for others.
+  return typeof modelId === "string" && /^o\d/i.test(modelId);
+}
+
+function modelSupportsCustomTemperature(modelId) {
+  // Some newer/high-end models only support the default temperature and reject custom values.
+  // Keep this conservative: omit temperature for o* reasoning models and gpt-5*.
+  return !(typeof modelId === "string" && (/^o\d/i.test(modelId) || /^gpt-5/i.test(modelId)));
+}
+
+function buildChatCompletionsBody({ model, messages, maxTokens, temperature, extraBody, tokenParam }) {
+  const body = {
+    model,
+    messages,
+    ...extraBody,
+  };
+  if (modelSupportsCustomTemperature(model) && typeof temperature === "number" && Number.isFinite(temperature)) {
+    body.temperature = temperature;
+  }
+  if (typeof maxTokens === "number" && Number.isFinite(maxTokens) && maxTokens > 0) {
+    body[tokenParam] = maxTokens;
+  }
+  return body;
+}
+
 async function callOpenAI(messages, apiConfig, extraBody = {}) {
   const { apiKey, model, baseUrl, maxTokens, temperature } = apiConfig;
 
@@ -63,17 +127,14 @@ async function callOpenAI(messages, apiConfig, extraBody = {}) {
 
   const url = `${baseUrl}/chat/completions`;
 
-  const body = {
-    model,
-    messages,
-    max_tokens: maxTokens,
-    temperature,
-    ...extraBody,
-  };
+  let tokenParam = modelPrefersMaxCompletionTokens(model) ? "max_completion_tokens" : "max_tokens";
+  let body = buildChatCompletionsBody({ model, messages, maxTokens, temperature, extraBody, tokenParam });
 
   let response;
   let retries = 0;
   const maxRetries = 3;
+  let tokenParamFallbackTried = false;
+  let temperatureFallbackTried = false;
 
   while (retries <= maxRetries) {
     try {
@@ -88,7 +149,8 @@ async function callOpenAI(messages, apiConfig, extraBody = {}) {
 
       if (response.ok) break;
 
-      if (response.status === 429 && retries < maxRetries) {
+      const retryableHttp = response.status === 429 || (response.status >= 500 && response.status <= 599);
+      if (retryableHttp && retries < maxRetries) {
         const waitMs = Math.pow(2, retries) * 1000 + Math.random() * 1000;
         await new Promise((r) => setTimeout(r, waitMs));
         retries++;
@@ -96,7 +158,41 @@ async function callOpenAI(messages, apiConfig, extraBody = {}) {
       }
 
       const errorBody = await response.json().catch(() => ({}));
-      const errorMsg = errorBody.error?.message || `HTTP ${response.status}`;
+      const errorMsgFull = errorBody.error?.message || `HTTP ${response.status}`;
+      const errorMsg = String(errorMsgFull).slice(0, 2000);
+
+      // Some models reject custom temperature and only support the default.
+      // Retry once with `temperature` omitted.
+      if (response.status === 400 && !temperatureFallbackTried) {
+        const tempUnsupported =
+          /Unsupported (parameter|value):\s*'temperature'/i.test(errorMsg)
+          || /Only the default\s*\(1\)\s*value is supported/i.test(errorMsg);
+        if (tempUnsupported && "temperature" in body) {
+          temperatureFallbackTried = true;
+          body = { ...body };
+          delete body.temperature;
+          continue;
+        }
+      }
+
+      // Some newer models reject `max_tokens` and require `max_completion_tokens` (and vice versa).
+      // Retry once with the alternative param to keep the UI simple.
+      if (response.status === 400 && !tokenParamFallbackTried) {
+        const needsMaxCompletion = /Unsupported parameter:\s*'max_tokens'[\s\S]*max_completion_tokens/i.test(errorMsg);
+        const needsMaxTokens = /Unsupported parameter:\s*'max_completion_tokens'[\s\S]*max_tokens/i.test(errorMsg);
+        if (needsMaxCompletion && tokenParam !== "max_completion_tokens") {
+          tokenParamFallbackTried = true;
+          tokenParam = "max_completion_tokens";
+          body = buildChatCompletionsBody({ model, messages, maxTokens, temperature, extraBody, tokenParam });
+          continue;
+        }
+        if (needsMaxTokens && tokenParam !== "max_tokens") {
+          tokenParamFallbackTried = true;
+          tokenParam = "max_tokens";
+          body = buildChatCompletionsBody({ model, messages, maxTokens, temperature, extraBody, tokenParam });
+          continue;
+        }
+      }
 
       if (response.status === 401) throw new OpenAIError(errorMsg, "INVALID_API_KEY");
       if (response.status === 404) throw new OpenAIError(`Model "${model}" not available`, "MODEL_NOT_FOUND");

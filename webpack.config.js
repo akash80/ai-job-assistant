@@ -39,6 +39,10 @@ module.exports = {
         { from: "src/options/options.css", to: "options/options.css" },
         { from: "src/content/content.css", to: "content/content.css" },
         { from: "assets/", to: "assets/" },
+        {
+          from: "node_modules/pdfjs-dist/build/pdf.worker.min.mjs",
+          to: "pdf.worker.min.mjs",
+        },
       ],
     }),
   ],

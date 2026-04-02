@@ -47,6 +47,52 @@ export async function typeHuman(element, text, options = {}) {
   element.classList.remove(FILL_ACTIVE_CLASS);
 }
 
+export async function typeFast(element, text, options = {}) {
+  const {
+    minDelay = 5,
+    maxDelay = 18,
+    pauseAfterComma = 30,
+    pauseAfterPeriod = 45,
+  } = options;
+
+  element.scrollIntoView({ behavior: "smooth", block: "center" });
+  await sleep(randomBetween(40, 90));
+
+  element.classList.add(FILL_ACTIVE_CLASS);
+  element.focus();
+  element.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+  await sleep(randomBetween(10, 30));
+
+  clearFieldValue(element);
+
+  const s = String(text ?? "");
+  for (let i = 0; i < s.length; i++) {
+    const char = s[i];
+    await typeChar(element, char, minDelay, maxDelay);
+    if (char === ",") await sleep(pauseAfterComma + Math.random() * 20);
+    if (char === ".") await sleep(pauseAfterPeriod + Math.random() * 30);
+  }
+
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+  element.dispatchEvent(new Event("blur", { bubbles: true }));
+  element.classList.remove(FILL_ACTIVE_CLASS);
+}
+
+export async function fillBot(element, value) {
+  element.scrollIntoView({ behavior: "auto", block: "center" });
+  element.classList.add(FILL_ACTIVE_CLASS);
+  element.focus();
+  element.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+
+  setNativeValue(element, String(value ?? ""));
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+  element.dispatchEvent(new Event("blur", { bubbles: true }));
+
+  element.classList.remove(FILL_ACTIVE_CLASS);
+  return true;
+}
+
 export async function fillSelect(selectElement, targetValue) {
   const option = findBestOption(selectElement, targetValue);
   if (!option) return false;
@@ -100,13 +146,16 @@ export async function fillRadio(radioGroup, targetValue) {
 }
 
 export async function fillCheckbox(checkbox, shouldCheck) {
+  if (isHumanOnlyCheckbox(checkbox)) return false;
   if ((shouldCheck && !checkbox.checked) || (!shouldCheck && checkbox.checked)) {
     checkbox.scrollIntoView({ behavior: "smooth", block: "center" });
     await sleep(randomBetween(200, 500));
     checkbox.focus();
     checkbox.click();
     checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
   }
+  return true;
 }
 
 export async function fillFileInput(fileInput, base64Data, fileName, mimeType) {
@@ -134,6 +183,17 @@ export async function fillFileInput(fileInput, base64Data, fileName, mimeType) {
 }
 
 export async function fillField(element, value) {
+  return fillFieldWithMode(element, value, "fast");
+}
+
+export async function fillFieldWithMode(element, value, fillMode = "fast") {
+  if (Array.isArray(element)) {
+    // Radio groups: Smart Form Fill passes the whole group to select the correct option.
+    const first = element[0];
+    const type = (first?.type || "text").toLowerCase();
+    if (type === "radio") return fillRadio(element, value);
+    return false;
+  }
   const tagName = element.tagName.toLowerCase();
   const type = (element.type || "text").toLowerCase();
 
@@ -145,18 +205,29 @@ export async function fillField(element, value) {
   }
 
   if (element.getAttribute("contenteditable") === "true") {
-    return fillContentEditable(element, value);
+    if (fillMode === "bot") {
+      element.scrollIntoView({ behavior: "auto", block: "center" });
+      element.focus();
+      element.textContent = String(value ?? "");
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }
+    return fillContentEditableWithMode(element, value, fillMode);
   }
 
   if (isComboboxInput(element)) {
     return fillCombobox(element, value);
   }
 
+  if (fillMode === "bot") return fillBot(element, value);
+  if (fillMode === "fast") return typeFast(element, value);
   return typeHuman(element, value);
 }
 
-export async function executeFillPlan(plan, callbacks = {}) {
+export async function executeFillPlan(plan, callbacks = {}, fillOptions = {}) {
   const { onFieldStart, onFieldComplete, onUnknownField, onComplete } = callbacks;
+  const fillMode = fillOptions?.fillMode || "fast";
   let filled = 0;
   let skipped = 0;
   let errors = 0;
@@ -167,7 +238,7 @@ export async function executeFillPlan(plan, callbacks = {}) {
     onFieldStart?.(field, filled, total);
 
     try {
-      const ok = await fillField(field.element, field.value);
+      const ok = await fillFieldWithMode(field.element, field.value, fillMode);
       if (ok === false) {
         skipped++;
       } else {
@@ -179,14 +250,16 @@ export async function executeFillPlan(plan, callbacks = {}) {
     }
 
     onFieldComplete?.(field, filled, total);
-    await sleep(randomBetween(300, 800));
+    if (fillMode === "bot") await sleep(randomBetween(0, 25));
+    else if (fillMode === "fast") await sleep(randomBetween(40, 120));
+    else await sleep(randomBetween(300, 800));
   }
 
   for (const field of plan.unknownFields) {
     const answer = await onUnknownField?.(field);
     if (answer) {
       try {
-        const ok = await fillField(field.element, answer);
+        const ok = await fillFieldWithMode(field.element, answer, fillMode);
         if (ok === false) {
           skipped++;
         } else {
@@ -241,15 +314,18 @@ async function deleteLastChar(element) {
   await sleep(randomBetween(30, 60));
 }
 
-async function fillContentEditable(element, value) {
+async function fillContentEditableWithMode(element, value, fillMode = "human") {
   element.scrollIntoView({ behavior: "smooth", block: "center" });
-  await sleep(randomBetween(200, 400));
+  if (fillMode === "fast") await sleep(randomBetween(30, 60));
+  else await sleep(randomBetween(200, 400));
   element.focus();
   element.textContent = "";
 
-  for (const char of value) {
+  const s = String(value ?? "");
+  for (const char of s) {
     document.execCommand("insertText", false, char);
-    await sleep(randomBetween(30, 90));
+    if (fillMode === "fast") await sleep(randomBetween(5, 16));
+    else await sleep(randomBetween(30, 90));
   }
 }
 
@@ -312,6 +388,40 @@ function findBestOption(selectElement, targetValue) {
 
 function normalizeToken(v) {
   return String(v || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+}
+
+function isHumanOnlyCheckbox(checkbox) {
+  try {
+    const label = getLabelText(checkbox);
+    const ariaLabel = checkbox.getAttribute("aria-label") || "";
+    const ariaLabelledBy = checkbox.getAttribute("aria-labelledby") || "";
+    const describedBy = checkbox.getAttribute("aria-describedby") || "";
+
+    const labelledByText = ariaLabelledBy
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent || "")
+      .join(" ");
+
+    const describedByText = describedBy
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent || "")
+      .join(" ");
+
+    const containerText =
+      checkbox.closest("label, .field, .form-field, .application-field, .application-question, li, div, td, form")?.textContent ||
+      "";
+
+    const haystack = normalizeToken([label, ariaLabel, labelledByText, describedByText, containerText].filter(Boolean).join(" "));
+
+    // Never auto-click acknowledgements / legal consent / marketing opt-ins; users should confirm those manually.
+    return /(privacy\s+notice|privacy\s+policy|terms\s+of\s+use|terms\s+and\s+conditions|consent|i\s+agree|i\s+have\s+read|acknowledge|attest|certif|authorize|opt\s*in|receive\s+(transactional|marketing)|marketing\s+(text|sms|email)|text\s+messages|sms\s+messages|email\s+messages|employment\s+opportunit)/.test(
+      haystack,
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isPlaceholderOption(option) {
@@ -418,7 +528,23 @@ function isComboboxInput(el) {
   const role = (el.getAttribute("role") || "").toLowerCase();
   const hasOwnedList = !!el.getAttribute("aria-owns");
   const cls = (el.className || "").toLowerCase();
-  return role === "combobox" || hasOwnedList || cls.includes("paginatedselect");
+  const dqa = (el.getAttribute("data-qa") || "").toLowerCase();
+  if (role === "combobox" || hasOwnedList || cls.includes("paginatedselect")) return true;
+  // Greenhouse / Momentum-style location: typeahead + hidden JSON backing field
+  if (cls.includes("location-input") || dqa === "location-input") return true;
+  if (hasSelectedLocationHiddenSibling(el)) return true;
+  return false;
+}
+
+/** True when a hidden selectedLocation (or #selected-location) lives in the same field block as this input. */
+function hasSelectedLocationHiddenSibling(input) {
+  const t = (input.type || "").toLowerCase();
+  if (t !== "text" && t !== "search") return false;
+  const scope = input.closest(".application-field, .application-question, form, li, div") || input.parentElement;
+  if (!scope) return false;
+  return !!scope.querySelector(
+    "input#selected-location[type=\"hidden\"], input[type=\"hidden\"][name=\"selectedLocation\"]",
+  );
 }
 
 async function fillCombobox(input, targetValue) {
@@ -437,19 +563,29 @@ async function fillCombobox(input, targetValue) {
     await sleep(randomBetween(120, 250));
   }
 
-  // Type query so remote/paginated picklists can load candidate options.
-  clearFieldValue(input);
-  setNativeValue(input, target);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new KeyboardEvent("keyup", { key: "a", bubbles: true }));
-  await sleep(randomBetween(220, 420));
+  // SuccessFactors paginatedPicklist: the input's onkeydown/onkeyup both fire juic's _click
+  // handler which toggles/resets the dropdown on every keypress. Typing would close the dropdown
+  // before options can be selected. Instead, just wait for the pre-loaded option list.
+  const isSFPicklist = (input.className || "").toLowerCase().includes("rcmpaginatedselectinput");
+  if (!isSFPicklist) {
+    // Type query so remote/paginated picklists can load candidate options.
+    // NOTE: Lever/Momentum-style typeaheads often don't react to only setNativeValue + Event("input").
+    // We simulate more realistic typing to trigger their listeners.
+    await typeComboboxQuery(input, target);
+    await sleep(randomBetween(220, 420));
+  } else {
+    // Give SF's juic framework time to open the dropdown and render options.
+    await sleep(randomBetween(400, 700));
+  }
+
+  // Async location search widgets need time for .dropdown-results to populate.
+  let options = await waitForComboboxOptions(input, target, 6500);
 
   // Try explicit option click first.
-  const options = getComboboxOptions(input);
   const best = findBestComboboxOption(options, target);
   if (best) {
     best.scrollIntoView({ block: "nearest" });
-    best.click();
+    clickLikeUser(best);
     best.dispatchEvent(new Event("change", { bubbles: true }));
     await sleep(randomBetween(120, 260));
   } else {
@@ -473,6 +609,60 @@ async function fillCombobox(input, targetValue) {
   return !!current && current !== "no selection";
 }
 
+function clickLikeUser(el) {
+  try {
+    el.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+  } catch {
+    // ignore
+  }
+  el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  el.click();
+}
+
+async function typeComboboxQuery(input, text) {
+  input.focus();
+  input.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+  clearFieldValue(input);
+
+  const s = String(text ?? "");
+  for (let i = 0; i < s.length; i++) {
+    const char = s[i];
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: char, bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent("keypress", { key: char, bubbles: true }));
+
+    setNativeValue(input, input.value + char);
+
+    // Some widgets key off InputEvent details; fall back to Event if unsupported.
+    try {
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, data: char, inputType: "insertText" }));
+    } catch {
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    input.dispatchEvent(new KeyboardEvent("keyup", { key: char, bubbles: true }));
+    await sleep(randomBetween(8, 20));
+  }
+}
+
+async function waitForComboboxOptions(input, targetValue, maxMs) {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    const opts = getComboboxOptions(input);
+    if (opts.length > 0) {
+      if (findBestComboboxOption(opts, targetValue)) return opts;
+      // Location APIs often return one primary row.
+      if (opts.length === 1) return opts;
+      // Multiple rows: brief pause for list/network to finish, then use latest nodes.
+      await sleep(220);
+      const settled = getComboboxOptions(input);
+      if (settled.length > 0) return settled;
+    }
+    await sleep(140);
+  }
+  return getComboboxOptions(input);
+}
+
 function findLinkedComboboxButton(input) {
   if (input.id) {
     const guessed = document.getElementById(input.id.replace("_input", "_selectButton"));
@@ -485,7 +675,19 @@ function findLinkedComboboxButton(input) {
 function getComboboxOptions(input) {
   const listId = input.getAttribute("aria-owns");
   const listEl = listId ? document.getElementById(listId) : null;
-  const root = listEl || document;
+  const fieldRoot = input.closest(".application-field, .application-question, form, li") || input.parentElement;
+  const localDropdown = fieldRoot?.querySelector(".dropdown-results");
+
+  if (listEl) {
+    return collectComboboxOptionElements(listEl);
+  }
+  if (localDropdown) {
+    return Array.from(localDropdown.children).filter((el) => normalizeToken(el.textContent).length > 0);
+  }
+  return collectComboboxOptionElements(document);
+}
+
+function collectComboboxOptionElements(root) {
   return Array.from(
     root.querySelectorAll(
       '[role="option"], li[role="option"], .fd-list__item, .ui-select-list-item, li, div[aria-selected]',
@@ -513,8 +715,12 @@ function findBestComboboxOption(options, targetValue) {
 }
 
 function findLinkedHiddenField(input) {
-  const cell = input.closest("td, .sfCascadingPicklist, .paginatedPicklistContainer, div");
+  const cell = input.closest(".application-field, td, .sfCascadingPicklist, .paginatedPicklistContainer, div");
   if (!cell) return null;
+  const preferred = cell.querySelector(
+    "input#selected-location[type=\"hidden\"], input[type=\"hidden\"][name=\"selectedLocation\"]",
+  );
+  if (preferred) return preferred;
   // SuccessFactors/SF often mirrors combobox to hidden input used on submit.
   return cell.querySelector('input[type="hidden"][name^="tor__f"], input[type="hidden"][name], input[type="hidden"]');
 }

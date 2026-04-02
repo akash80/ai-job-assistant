@@ -21,6 +21,9 @@
         <li><a href="#preferences" class="nav-link" data-tab="preferences">Preferences<span class="nav-warn" id="warn-preferences"></span></a></li>
         <li><a href="#answers" class="nav-link" data-tab="answers">Saved Answers<span class="nav-warn" id="warn-answers"></span></a></li>
         <li><a href="#history" class="nav-link" data-tab="history">History</a></li>
+        <li><a href="#skills-intel" class="nav-link" data-tab="skills-intel">Skills Intelligence</a></li>
+        <li><a href="#find-jobs" class="nav-link" data-tab="find-jobs">Find Jobs</a></li>
+        <li><a href="#security" class="nav-link" data-tab="security">Security</a></li>
         <li><a href="#data" class="nav-link" data-tab="data">Data Management</a></li>
       </ul>
     </nav>
@@ -30,38 +33,89 @@
       <!-- API Tab -->
       <section id="tab-api" class="tab-content active">
         <h2>API Configuration</h2>
-        <p class="tab-desc">Connect your OpenAI account to power the AI analysis engine.</p>
+        <p class="tab-desc">Connect AI providers to power analysis, cover letters, and job search. <strong>The extension works without any API key</strong> using basic keyword matching.</p>
 
-        <div class="form-group">
-          <label for="api-key">OpenAI API Key</label>
-          <div class="input-with-action">
-            <input type="password" id="api-key" placeholder="sk-..." class="input" />
-            <button id="toggle-key-vis" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
-          </div>
-          <p class="form-hint">Your key is stored locally and never sent to any server except OpenAI.</p>
-        </div>
-
-        <div class="form-group">
-          <label for="model-select">Model</label>
-          <select id="model-select" class="input"></select>
-          <p class="form-hint" id="model-desc"></p>
-          <div id="model-pricing" class="model-pricing"></div>
-        </div>
-
-        <div class="form-row">
+        <!-- OpenAI -->
+        <div class="profile-section">
+          <h3 class="profile-section-title">OpenAI <span class="badge-provider">Best for Analysis</span></h3>
           <div class="form-group">
-            <label for="temperature">Temperature</label>
-            <input type="number" id="temperature" class="input" min="0" max="1" step="0.1" value="0.3" />
+            <label for="api-key">OpenAI API Key</label>
+            <div class="input-with-action">
+              <input type="password" id="api-key" placeholder="sk-..." class="input" />
+              <button id="toggle-key-vis" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
+            </div>
+            <p class="form-hint">Stored locally. Never sent anywhere except OpenAI directly from your browser.</p>
           </div>
           <div class="form-group">
-            <label for="max-tokens">Max Tokens</label>
-            <input type="number" id="max-tokens" class="input" min="100" max="4000" step="100" value="1000" />
+            <label for="model-select">Model</label>
+            <select id="model-select" class="input"></select>
+            <p class="form-hint" id="model-desc"></p>
+            <div id="model-pricing" class="model-pricing"></div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="temperature">Temperature</label>
+              <input type="number" id="temperature" class="input" min="0" max="1" step="0.1" value="0.3" />
+            </div>
+            <div class="form-group">
+              <label for="max-tokens">Max Tokens</label>
+              <input type="number" id="max-tokens" class="input" min="100" max="4000" step="100" value="1000" />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button id="btn-test-key" class="btn btn-secondary">Test OpenAI</button>
+          </div>
+          <div id="openai-test-status" class="status-msg" style="display:none"></div>
+        </div>
+
+        <!-- Anthropic -->
+        <div class="profile-section">
+          <h3 class="profile-section-title">Anthropic Claude <span class="badge-provider">Best for Writing</span></h3>
+          <div class="form-group">
+            <label for="anthropic-key">Anthropic API Key</label>
+            <div class="input-with-action">
+              <input type="password" id="anthropic-key" placeholder="sk-ant-..." class="input" />
+              <button id="toggle-anthropic-vis" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
+            </div>
+            <p class="form-hint">Used for job analysis and cover letter generation. Excellent at writing quality.</p>
+          </div>
+          <div class="form-group">
+            <label for="anthropic-model-select">Claude Model</label>
+            <select id="anthropic-model-select" class="input"></select>
+            <p class="form-hint" id="anthropic-model-desc"></p>
+          </div>
+          <div class="form-actions">
+            <button id="btn-test-anthropic" class="btn btn-secondary">Test Anthropic</button>
+          </div>
+          <div id="anthropic-test-status" class="status-msg" style="display:none"></div>
+        </div>
+
+        <!-- Perplexity -->
+        <div class="profile-section">
+          <h3 class="profile-section-title">Perplexity <span class="badge-provider badge-perplexity">Best for Job Search</span></h3>
+          <div class="form-group">
+            <label for="perplexity-key">Perplexity API Key</label>
+            <div class="input-with-action">
+              <input type="password" id="perplexity-key" placeholder="pplx-..." class="input" />
+              <button id="toggle-perplexity-vis" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
+            </div>
+            <p class="form-hint">Powers the <strong>Find Jobs</strong> feature with real-time web search. Not required for other features.</p>
+          </div>
+          <div class="form-group">
+            <label for="perplexity-model-select">Perplexity Model</label>
+            <select id="perplexity-model-select" class="input">
+              <option value="sonar-pro">Sonar Pro — Best results, real-time search</option>
+              <option value="sonar">Sonar — Fast and affordable</option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button id="btn-test-perplexity" class="btn btn-secondary">Test Perplexity</button>
+          </div>
+          <div id="perplexity-test-status" class="status-msg" style="display:none"></div>
         </div>
 
         <div class="form-actions">
-          <button id="btn-test-key" class="btn btn-secondary">Test Connection</button>
-          <button id="btn-save-api" class="btn btn-primary">Save Changes</button>
+          <button id="btn-save-api" class="btn btn-primary btn-lg">Save All API Settings</button>
         </div>
         <div id="api-status" class="status-msg" style="display:none"></div>
       </section>
@@ -110,7 +164,7 @@
         <!-- Resume Text -->
         <div class="profile-section">
           <h3 class="profile-section-title">Resume Text (for AI Parsing)</h3>
-          <p class="form-hint" style="margin-bottom:10px">Paste your resume text below for AI to parse into your profile. This is separate from the PDF upload.</p>
+          <p class="form-hint" style="margin-bottom:10px">Paste your resume text below for AI to parse into your profile. If you uploaded a PDF, use <strong>Extract text from PDF</strong> to fill this box automatically (works for text-based PDFs).</p>
           <div class="form-group">
             <textarea id="resume-text" class="input textarea-large" placeholder="Paste your full resume text here...&#10;&#10;Any format works — the AI will figure it out.&#10;&#10;Tip: Open your resume file, press Ctrl+A to select all, Ctrl+C to copy, then Ctrl+V here."></textarea>
             <div class="form-meta">
@@ -118,10 +172,21 @@
               <span id="resume-date"></span>
             </div>
           </div>
+          <div class="form-group" style="margin-top:14px">
+            <label for="resume-profile-depth">How much detail when building your profile</label>
+            <select id="resume-profile-depth" class="input" title="Applies to Save &amp; Parse and to the copy-paste ChatGPT prompt">
+              <option value="compact">Essentials — shortest</option>
+              <option value="standard" selected>Balanced — recommended</option>
+              <option value="detailed">Rich — more bullets &amp; blurbs</option>
+              <option value="comprehensive">Complete — everything in the résumé</option>
+            </select>
+            <p class="form-hint" id="resume-depth-hint"></p>
+          </div>
         </div>
 
         <div class="form-actions">
           <button id="btn-save-resume" class="btn btn-primary btn-lg">Save &amp; Parse with AI</button>
+          <button id="btn-extract-pdf-text" class="btn btn-secondary" style="display:none">Extract Text from PDF</button>
         </div>
 
         <div id="resume-parse-progress" class="parse-progress" style="display:none">
@@ -148,6 +213,33 @@
           </div>
           <div class="json-preview-stats" id="json-stats"></div>
           <pre id="json-preview" class="json-preview"></pre>
+        </div>
+
+        <!-- No-API-Key: Prompt Generator -->
+        <div class="profile-section" id="prompt-generator-section">
+          <h3 class="profile-section-title">&#129302; Generate Profile Without API Key</h3>
+          <p class="form-hint" style="margin-bottom:12px">No API key? Use ChatGPT, Claude, or any AI chat to generate your profile JSON, then paste it below.</p>
+          <div class="instructions-card" style="margin-bottom:16px">
+            <ol>
+              <li>Paste your resume text in the box above</li>
+              <li>Click <strong>"Copy Prompt"</strong> — a ready-made AI prompt will be copied</li>
+              <li>Open <a href="https://chat.openai.com" target="_blank">ChatGPT</a>, <a href="https://claude.ai" target="_blank">Claude</a>, or <a href="https://gemini.google.com" target="_blank">Gemini</a></li>
+              <li>Paste the prompt and send it</li>
+              <li>Copy the JSON response and paste it in the box below</li>
+              <li>Click <strong>"Import JSON Profile"</strong></li>
+            </ol>
+          </div>
+          <div class="form-actions" style="margin-bottom:12px">
+            <button id="btn-copy-ai-prompt" class="btn btn-secondary">Copy Prompt for ChatGPT/Claude</button>
+          </div>
+          <div class="form-group">
+            <label for="json-import-input">Paste JSON from AI Chat</label>
+            <textarea id="json-import-input" class="input textarea-small" placeholder='Paste the JSON profile generated by ChatGPT/Claude here...'></textarea>
+          </div>
+          <div class="form-actions">
+            <button id="btn-import-json-profile" class="btn btn-primary">Import JSON Profile</button>
+          </div>
+          <div id="json-import-status" class="status-msg" style="display:none"></div>
         </div>
       </section>
 
@@ -274,6 +366,45 @@
         <h2>Job Preferences</h2>
         <p class="tab-desc">Help the AI make better recommendations by sharing your preferences.</p>
 
+        <div class="profile-section" style="margin-bottom:18px">
+          <h3 class="profile-section-title">Form Filling</h3>
+          <div class="form-group">
+            <label for="pref-fill-mode">Fill mode</label>
+            <select id="pref-fill-mode" class="input">
+              <option value="human">Human — realistic typing (slowest)</option>
+              <option value="fast">Fast — types quickly (recommended)</option>
+              <option value="bot">Bot — instant values (fastest)</option>
+            </select>
+            <p class="form-hint">Human simulates real typing with pauses. Fast keeps typing events but uses shorter delays. Bot sets values instantly while still firing input/change events (some sites may still require manual review).</p>
+          </div>
+          <div class="form-group" style="margin-top:14px">
+            <label class="toggle-label">
+              <input type="checkbox" id="pref-smart-fill-enabled" />
+              <span>Enable Smart Form Fill (AI understands the whole form)</span>
+            </label>
+            <p class="form-hint">Smart Form Fill uses AI to map fields to your Profile, Saved Answers, and Preferences. It only auto-fills high-confidence fields and asks you to confirm the rest.</p>
+          </div>
+          <div class="form-row" style="margin-top:8px">
+            <div class="form-group">
+              <label for="pref-smart-fill-threshold">Smart auto-fill confidence</label>
+              <select id="pref-smart-fill-threshold" class="input">
+                <option value="0.8">0.80 — more auto-fill (riskier)</option>
+                <option value="0.85">0.85 — balanced</option>
+                <option value="0.9">0.90 — safer (recommended)</option>
+                <option value="0.95">0.95 — strict</option>
+              </select>
+              <p class="form-hint">Only answers at or above this confidence will be auto-filled. Others will be shown for confirmation and can be saved for next time.</p>
+            </div>
+            <div class="form-group">
+              <label class="toggle-label" style="margin-top:22px">
+                <input type="checkbox" id="pref-smart-fill-allow-generation" />
+                <span>Allow short AI-written answers when needed</span>
+              </label>
+              <p class="form-hint">For short free-text questions (1–3 sentences). AI will not invent facts; you review before saving.</p>
+            </div>
+          </div>
+        </div>
+
         <div class="form-group">
           <label>Remote Work</label>
           <div class="radio-group">
@@ -363,13 +494,90 @@
       <!-- History Tab -->
       <section id="tab-history" class="tab-content">
         <h2>Application History</h2>
-        <p class="tab-desc">Track jobs you've analyzed, applied to, or skipped.</p>
+        <p class="tab-desc">Track jobs you've analyzed, applied to, and your interview pipeline.</p>
+        <div class="history-filters">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="applied">Applied</button>
+          <button class="filter-btn" data-filter="interviewing">Interviewing</button>
+          <button class="filter-btn" data-filter="offer">Offer</button>
+          <button class="filter-btn" data-filter="rejected">Rejected</button>
+          <button class="filter-btn" data-filter="analyzed">Analyzed</button>
+          <button class="filter-btn" data-filter="skipped">Skipped</button>
+        </div>
         <div id="history-list" class="history-container">
           <p class="empty-state">No history yet. Start analyzing job postings!</p>
         </div>
       </section>
 
+      <!-- Skills Intelligence Tab -->
+      <section id="tab-skills-intel" class="tab-content">
+        <h2>Skills Intelligence</h2>
+        <p class="tab-desc">Skills that appear frequently in jobs you qualify for (match score ≥75%) but aren't in your profile yet. Add them to become an even stronger candidate.</p>
+        <div id="skill-gaps-container">
+          <p class="empty-state">No skill gap data yet. Analyze more job postings to build your intelligence report.</p>
+        </div>
+        <div class="form-actions" style="margin-top:16px">
+          <button id="btn-clear-skill-gaps" class="btn btn-secondary">Clear Skill Gap Data</button>
+        </div>
+        <div id="skill-gaps-status" class="status-msg" style="display:none"></div>
+      </section>
+
+      <!-- Find Jobs Tab -->
+      <section id="tab-find-jobs" class="tab-content">
+        <h2>Find Jobs</h2>
+        <p class="tab-desc">Discover recently posted jobs matching your skills using Perplexity's real-time search. Requires a Perplexity API key.</p>
+
+        <div id="find-jobs-no-key" class="instructions-card" style="display:none">
+          <h3>Perplexity API Key Required</h3>
+          <p>This feature uses Perplexity's real-time web search to find actual, current job postings. Add your Perplexity API key in <a href="#api" class="link-inline" id="goto-api-from-jobs">API Configuration</a>.</p>
+          <p class="form-hint" style="margin-top:8px">Perplexity API: <a href="https://www.perplexity.ai/settings/api" target="_blank">Get your key here</a></p>
+        </div>
+
+        <div id="find-jobs-ui">
+          <div class="form-actions" style="margin-bottom:16px">
+            <button id="btn-find-jobs" class="btn btn-primary btn-lg">&#128269; Find Jobs for My Profile</button>
+          </div>
+          <div id="find-jobs-status" class="status-msg" style="display:none"></div>
+          <div id="find-jobs-results"></div>
+        </div>
+      </section>
+
       <!-- Data Management Tab -->
+      <section id="tab-security" class="tab-content">
+        <h2>Security</h2>
+        <p class="tab-desc">Optional security mode to encrypt stored API keys at rest. This is <strong>off by default</strong> and does not affect normal usage unless you enable it.</p>
+
+        <div class="profile-section">
+          <h3 class="profile-section-title">Encrypted Key Storage (Optional)</h3>
+
+          <div class="form-group">
+            <label class="toggle-label">
+              <input type="checkbox" id="sec-enable" />
+              <span>Enable Security Mode (encrypt stored API keys)</span>
+            </label>
+            <p class="form-hint">When enabled, API keys are stored encrypted in browser storage. You'll need to unlock once per browser restart to use AI features.</p>
+          </div>
+
+          <div class="form-group">
+            <label for="sec-passphrase">Passphrase</label>
+            <div class="input-with-action">
+              <input type="password" id="sec-passphrase" class="input" placeholder="Min 8 characters" />
+              <button id="sec-toggle-passphrase" class="btn btn-icon" title="Toggle visibility">&#128065;</button>
+            </div>
+            <p class="form-hint">This passphrase is not stored. If you forget it, encrypted keys can’t be recovered.</p>
+          </div>
+
+          <div class="form-actions">
+            <button id="sec-btn-enable" class="btn btn-primary">Enable</button>
+            <button id="sec-btn-unlock" class="btn btn-secondary">Unlock</button>
+            <button id="sec-btn-lock" class="btn btn-secondary">Lock</button>
+            <button id="sec-btn-disable" class="btn btn-danger">Disable</button>
+          </div>
+
+          <div id="sec-status" class="status-msg" style="display:none"></div>
+        </div>
+      </section>
+
       <section id="tab-data" class="tab-content">
         <h2>Data Management</h2>
         <p class="tab-desc">Export, import, or clear your data.</p>

@@ -403,6 +403,12 @@ select.input {
   color: #94a3b8;
 }
 
+.history-job-id {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: #64748b;
+}
+
 .history-action {
   padding: 4px 10px;
   border-radius: 9999px;
@@ -1139,4 +1145,150 @@ select.input {
   .data-actions {
     grid-template-columns: 1fr;
   }
+}
+
+/* ─── Provider Badges ─────────────────────────────────────────── */
+.badge-provider {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #e0e7ff;
+  color: #6366f1;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.badge-perplexity {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+/* ─── History Filters ─────────────────────────────────────────── */
+.history-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.filter-btn {
+  padding: 5px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  background: #f8fafc;
+  color: #475569;
+  transition: all 150ms;
+}
+
+.filter-btn.active {
+  background: #6366f1;
+  color: #fff;
+  border-color: #6366f1;
+}
+
+.filter-btn:hover:not(.active) {
+  background: #f1f5f9;
+}
+
+.history-status-select {
+  min-width: 110px;
+  cursor: pointer;
+  font-size: 12px !important;
+}
+
+.history-link {
+  color: #6366f1;
+  text-decoration: none;
+  margin-left: 4px;
+  font-size: 12px;
+}
+
+.history-link:hover { text-decoration: underline; }
+
+/* ─── Skills Intelligence ─────────────────────────────────────── */
+.skill-gaps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.skill-gap-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.skill-gap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.skill-gap-count {
+  font-size: 11px;
+  color: #64748b;
+  background: #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.skill-gap-jobs {
+  font-size: 11px;
+  color: #475569;
+  padding-left: 16px;
+  margin-bottom: 8px;
+}
+
+.skill-gap-jobs li { margin-bottom: 2px; }
+
+.skill-gap-actions { margin-top: 8px; }
+
+/* ─── Find Jobs Results ───────────────────────────────────────── */
+.jobs-results-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.job-result-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.job-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.job-result-meta {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.job-result-match {
+  font-size: 12px;
+  color: #475569;
+  font-style: italic;
+}
+
+/* ─── Prompt Generator ────────────────────────────────────────── */
+#prompt-generator-section .instructions-card ol {
+  margin-left: 0;
+}
+
+.link-inline {
+  color: #6366f1;
+  text-decoration: underline;
 }

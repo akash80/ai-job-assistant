@@ -1,4 +1,9 @@
-import { MSG, SUPPORTED_MODELS, DEFAULT_API_CONFIG } from "../shared/constants.js";
+import { MSG, SUPPORTED_MODELS, ANTHROPIC_MODELS, PERPLEXITY_MODELS, DEFAULT_API_CONFIG, APPLICATION_STATUSES } from "../shared/constants.js";
+import {
+  buildProfileGenerationPrompt,
+  normalizeResumeProfileDepth,
+  RESUME_PROFILE_DEPTH_OPTIONS,
+} from "../shared/prompts.js";
 import { formatUsdInPreferenceCurrency } from "../shared/currency-format.js";
 import {
   formatDate,
@@ -64,11 +69,14 @@ document.addEventListener("DOMContentLoaded", init);
 async function init() {
   setupTabs();
   await loadApiConfig();
+  await loadSecurityStatus();
   await loadResume();
   await loadProfile();
   await loadPreferences();
   await loadAnswers();
   await loadHistory();
+  await loadSkillGaps();
+  await checkFindJobsReady();
   bindEvents();
   await updateWarningBadges();
 
@@ -141,6 +149,39 @@ async function loadApiConfig() {
   document.getElementById("temperature").value = config.temperature ?? 0.3;
   document.getElementById("max-tokens").value = config.maxTokens ?? 1000;
 
+  // Anthropic
+  const anthropicKeyEl = document.getElementById("anthropic-key");
+  if (anthropicKeyEl) anthropicKeyEl.value = config.anthropicKey || "";
+
+  // Perplexity
+  const perplexityKeyEl = document.getElementById("perplexity-key");
+  if (perplexityKeyEl) perplexityKeyEl.value = config.perplexityKey || "";
+  const perplexityModelEl = document.getElementById("perplexity-model-select");
+  if (perplexityModelEl) perplexityModelEl.value = config.perplexityModel || "sonar";
+
+  // Anthropic model select
+  const anthropicSelect = document.getElementById("anthropic-model-select");
+  if (anthropicSelect) {
+    anthropicSelect.innerHTML = "";
+    for (const m of ANTHROPIC_MODELS) {
+      const opt = document.createElement("option");
+      opt.value = m.id;
+      opt.textContent = `${m.name} — ${m.desc}`;
+      if (m.id === (config.anthropicModel || "claude-sonnet-4-6")) opt.selected = true;
+      anthropicSelect.appendChild(opt);
+    }
+    const descEl = document.getElementById("anthropic-model-desc");
+    if (descEl) {
+      const sel = ANTHROPIC_MODELS.find((m) => m.id === anthropicSelect.value);
+      if (sel) descEl.textContent = sel.desc;
+    }
+    anthropicSelect.addEventListener("change", () => {
+      const sel = ANTHROPIC_MODELS.find((m) => m.id === anthropicSelect.value);
+      const descEl = document.getElementById("anthropic-model-desc");
+      if (descEl && sel) descEl.textContent = sel.desc;
+    });
+  }
+
   const prefResp = await sendMsg(MSG.GET_PREFERENCES);
   const prefs = prefResp.success && prefResp.data ? prefResp.data : {};
 
@@ -207,15 +248,70 @@ async function refreshModelPricingDisplay() {
 }
 
 async function saveApiConfigHandler() {
+  const normalizedOpenAI = document.getElementById("api-key").value.trim();
+  const normalizedAnthropic = (document.getElementById("anthropic-key")?.value || "").trim();
+  const normalizedPerplexity = (document.getElementById("perplexity-key")?.value || "").trim();
+
+  const invalid = validateApiKeys({
+    openai: normalizedOpenAI,
+    anthropic: normalizedAnthropic,
+    perplexity: normalizedPerplexity,
+  });
+  if (invalid.blockSave) {
+    showStatus("api-status", invalid.message, "error");
+    return;
+  }
+  if (invalid.message) {
+    // Soft warning: still save so we don't break users with non-standard keys.
+    showStatus("api-status", invalid.message, "error");
+    // Continue saving.
+  }
+
   const config = {
-    apiKey: document.getElementById("api-key").value.trim(),
+    apiKey: normalizedOpenAI,
     model: document.getElementById("model-select").value,
     baseUrl: DEFAULT_API_CONFIG.baseUrl,
     temperature: parseFloat(document.getElementById("temperature").value) || 0.3,
     maxTokens: parseInt(document.getElementById("max-tokens").value) || 1000,
+    // Anthropic
+    anthropicKey: normalizedAnthropic,
+    anthropicModel: document.getElementById("anthropic-model-select")?.value || "claude-sonnet-4-6",
+    // Perplexity
+    perplexityKey: normalizedPerplexity,
+    perplexityModel: document.getElementById("perplexity-model-select")?.value || "sonar",
   };
   await sendMsg(MSG.SAVE_API_CONFIG, config);
-  showStatus("api-status", "Settings saved!", "success");
+  showStatus("api-status", "All API settings saved!", "success");
+  await checkFindJobsReady();
+}
+
+function validateApiKeys(keys) {
+  const openai = String(keys?.openai || "");
+  const anthropic = String(keys?.anthropic || "");
+  const perplexity = String(keys?.perplexity || "");
+
+  const anyWhitespace = (s) => /\s/.test(s);
+  const looksTooShort = (s) => s && s.length < 20;
+
+  // Hard block: whitespace inside keys almost always indicates accidental copy/paste.
+  if ((openai && anyWhitespace(openai)) || (anthropic && anyWhitespace(anthropic)) || (perplexity && anyWhitespace(perplexity))) {
+    return { blockSave: true, message: "API keys cannot contain spaces or newlines. Please paste the key again." };
+  }
+
+  // Soft warnings: don't block to avoid breaking non-standard key formats.
+  if (looksTooShort(openai) || looksTooShort(anthropic) || looksTooShort(perplexity)) {
+    return { blockSave: false, message: "One of the API keys looks unusually short. Double-check it if requests fail." };
+  }
+
+  const warn = [];
+  if (openai && !/^sk-[A-Za-z0-9_\-]+$/.test(openai)) warn.push("OpenAI");
+  if (anthropic && !/^sk-ant-[A-Za-z0-9_\-]+$/.test(anthropic)) warn.push("Anthropic");
+  if (perplexity && !/^[A-Za-z0-9_\-]+$/.test(perplexity)) warn.push("Perplexity");
+  if (warn.length) {
+    return { blockSave: false, message: `${warn.join(", ")} key format looks unusual. Saved anyway, but double-check if requests fail.` };
+  }
+
+  return { blockSave: false, message: "" };
 }
 
 async function testApiKeyHandler() {
@@ -231,15 +327,107 @@ async function testApiKeyHandler() {
   };
   const resp = await sendMsg(MSG.TEST_API_KEY, config);
   btn.disabled = false;
-  btn.textContent = "Test Connection";
+  btn.textContent = "Test OpenAI";
   if (resp.success && resp.data.valid) {
-    showStatus("api-status", "Connection successful! API key is valid.", "success");
+    showStatus("openai-test-status", "OpenAI connection successful!", "success");
   } else {
-    showStatus("api-status", `Connection failed: ${resp.data?.error || resp.error}`, "error");
+    showStatus("openai-test-status", `Failed: ${resp.data?.error || resp.error}`, "error");
+  }
+}
+
+async function testAnthropicKeyHandler() {
+  const btn = document.getElementById("btn-test-anthropic");
+  btn.disabled = true;
+  btn.textContent = "Testing...";
+  const config = {
+    anthropicKey: (document.getElementById("anthropic-key")?.value || "").trim(),
+    anthropicModel: document.getElementById("anthropic-model-select")?.value || "claude-sonnet-4-6",
+    maxTokens: 5,
+    temperature: 0.3,
+  };
+  const resp = await sendMsg(MSG.TEST_ANTHROPIC_KEY, config);
+  btn.disabled = false;
+  btn.textContent = "Test Anthropic";
+  if (resp.success && resp.data?.valid) {
+    showStatus("anthropic-test-status", "Anthropic connection successful!", "success");
+  } else {
+    showStatus("anthropic-test-status", `Failed: ${resp.data?.error || resp.error}`, "error");
+  }
+}
+
+async function testPerplexityKeyHandler() {
+  const btn = document.getElementById("btn-test-perplexity");
+  btn.disabled = true;
+  btn.textContent = "Testing...";
+  const config = {
+    perplexityKey: (document.getElementById("perplexity-key")?.value || "").trim(),
+    perplexityModel: document.getElementById("perplexity-model-select")?.value || "sonar",
+    maxTokens: 5,
+    temperature: 0.3,
+  };
+  const resp = await sendMsg(MSG.TEST_PERPLEXITY_KEY, config);
+  btn.disabled = false;
+  btn.textContent = "Test Perplexity";
+  if (resp.success && resp.data?.valid) {
+    showStatus("perplexity-test-status", "Perplexity connection successful!", "success");
+  } else {
+    showStatus("perplexity-test-status", `Failed: ${resp.data?.error || resp.error}`, "error");
   }
 }
 
 // ─── Resume ─────────────────────────────────────────────────────
+
+const FIND_JOBS_BTN_LABEL = `${String.fromCodePoint(0x1f50d)} Find Jobs for My Profile`;
+
+async function extractPdfTextToResume() {
+  const pdfResp = await sendMsg(MSG.GET_RESUME_PDF);
+  if (!pdfResp.success || !pdfResp.data?.base64) {
+    showStatus("resume-status", "No PDF uploaded. Please upload a PDF first.", "error");
+    return;
+  }
+  const btn = document.getElementById("btn-extract-pdf-text");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Extracting…";
+  }
+  showStatus("resume-status", "Reading PDF…", "success");
+  try {
+    const pdfjs = await import("pdfjs-dist/build/pdf.min.mjs");
+    pdfjs.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL("pdf.worker.min.mjs");
+    const binary = atob(pdfResp.data.base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const pdf = await pdfjs.getDocument({ data: bytes, useSystemFonts: true }).promise;
+    let fullText = "";
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      const line = content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+      fullText += `${line}\n\n`;
+    }
+    const trimmed = fullText.replace(/\s+/g, " ").trim();
+    if (!trimmed) {
+      showStatus("resume-status", "No text found in this PDF (it may be a scanned image). Paste text manually or use OCR.", "error");
+      return;
+    }
+    const ta = document.getElementById("resume-text");
+    ta.value = fullText.trim();
+    ta.dispatchEvent(new Event("input"));
+    showStatus(
+      "resume-status",
+      `Extracted text from PDF (${pdf.numPages} page${pdf.numPages === 1 ? "" : "s"}). Review and click Save & Parse with AI.`,
+      "success",
+    );
+  } catch (e) {
+    console.error(e);
+    showStatus("resume-status", e.message || "PDF extraction failed.", "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Extract text from PDF";
+    }
+  }
+}
 
 async function loadResume() {
   const resp = await sendMsg(MSG.GET_RESUME);
@@ -295,9 +483,21 @@ function handlePdfFile(file) {
       mimeType: file.type,
       savedAt: new Date().toISOString(),
     };
-    await sendMsg(MSG.SAVE_RESUME_PDF, pdfData);
+    const saveResp = await sendMsg(MSG.SAVE_RESUME_PDF, pdfData);
+    if (!saveResp.success) {
+      showStatus("resume-status", `Failed to save PDF: ${saveResp.error || "Unknown error"}`, "error");
+      return;
+    }
     showPdfInfo(file.name, file.size);
     showStatus("resume-status", `Resume PDF "${file.name}" uploaded and saved.`, "success");
+
+    const existingText = document.getElementById("resume-text")?.value?.trim() || "";
+    if (existingText) {
+      showStatus("resume-status", "PDF uploaded. Resume text already has content, so it was not overwritten. Use “Extract Text from PDF” if you want to replace it.", "success");
+      return;
+    }
+
+    await extractPdfTextToResume();
   };
   reader.onerror = () => {
     showStatus("resume-status", "Failed to read the PDF file.", "error");
@@ -310,6 +510,8 @@ function showPdfInfo(name, size) {
   document.getElementById("pdf-upload-info").style.display = "flex";
   document.getElementById("pdf-file-name").textContent = name;
   document.getElementById("pdf-file-size").textContent = formatFileSize(size);
+  const exBtn = document.getElementById("btn-extract-pdf-text");
+  if (exBtn) exBtn.style.display = "inline-flex";
 }
 
 function showPdfPlaceholder() {
@@ -317,6 +519,8 @@ function showPdfPlaceholder() {
   document.getElementById("pdf-upload-info").style.display = "none";
   const pdfInput = document.getElementById("resume-pdf-input");
   if (pdfInput) pdfInput.value = "";
+  const exBtn = document.getElementById("btn-extract-pdf-text");
+  if (exBtn) exBtn.style.display = "none";
 }
 
 function formatFileSize(bytes) {
@@ -337,8 +541,9 @@ async function saveResumeHandler() {
   document.getElementById("resume-date").textContent = `Last saved: ${formatDate(new Date().toISOString())}`;
 
   const apiResp = await sendMsg(MSG.GET_API_CONFIG);
-  if (!apiResp.success || !apiResp.data?.apiKey) {
-    showStatus("resume-status", "Resume saved! Configure your API key to auto-parse with AI.", "success");
+  const hasAnyKey = apiResp.success && (apiResp.data?.apiKey || apiResp.data?.anthropicKey || apiResp.data?.perplexityKey);
+  if (!hasAnyKey) {
+    showStatus("resume-status", "Resume saved! No API key configured — use the prompt generator below to parse your profile.", "success");
     return;
   }
 
@@ -963,11 +1168,38 @@ async function saveProfileHandler() {
 
 // ─── Preferences ────────────────────────────────────────────────
 
+async function persistResumeProfileDepth() {
+  const el = document.getElementById("resume-profile-depth");
+  if (!el) return;
+  const prevResp = await sendMsg(MSG.GET_PREFERENCES);
+  const prev = prevResp.success && prevResp.data ? prevResp.data : {};
+  await sendMsg(MSG.SAVE_PREFERENCES, {
+    ...prev,
+    resumeProfileDepth: normalizeResumeProfileDepth(el.value),
+  });
+}
+
+function updateResumeDepthHint() {
+  const el = document.getElementById("resume-profile-depth");
+  const hint = document.getElementById("resume-depth-hint");
+  if (!el || !hint) return;
+  const opt = RESUME_PROFILE_DEPTH_OPTIONS.find((o) => o.id === el.value);
+  hint.textContent = opt ? opt.hint : "";
+}
+
 async function loadPreferences() {
   const resp = await sendMsg(MSG.GET_PREFERENCES);
   if (resp.success && resp.data) {
     const p = resp.data;
     lastCommittedCurrency = p.salaryCurrency || "USD";
+    const fillModeEl = document.getElementById("pref-fill-mode");
+    if (fillModeEl) fillModeEl.value = p.fillMode || "fast";
+    const smartEnabledEl = document.getElementById("pref-smart-fill-enabled");
+    if (smartEnabledEl) smartEnabledEl.checked = p.smartFillEnabled !== false;
+    const smartThresholdEl = document.getElementById("pref-smart-fill-threshold");
+    if (smartThresholdEl) smartThresholdEl.value = String(Number(p.smartFillConfidenceThreshold || 0.9));
+    const smartGenEl = document.getElementById("pref-smart-fill-allow-generation");
+    if (smartGenEl) smartGenEl.checked = p.smartFillAllowGeneration !== false;
     const remoteVal = p.remote === true ? "true" : p.remote === false ? "false" : "null";
     const radio = document.querySelector(`input[name="remote"][value="${remoteVal}"]`);
     if (radio) radio.checked = true;
@@ -978,6 +1210,11 @@ async function loadPreferences() {
     document.getElementById("pref-location").value = (p.preferredLocations || []).join(", ");
     document.getElementById("pref-excluded-locations").value = (p.excludedLocations || []).join(", ");
     document.getElementById("pref-relocate").checked = p.willingToRelocate || false;
+    const depthEl = document.getElementById("resume-profile-depth");
+    if (depthEl) {
+      depthEl.value = normalizeResumeProfileDepth(p.resumeProfileDepth);
+      updateResumeDepthHint();
+    }
   }
 }
 
@@ -986,8 +1223,16 @@ async function savePrefsHandler() {
   const remoteVal = remoteRadio?.value === "true" ? true : remoteRadio?.value === "false" ? false : null;
   const prevResp = await sendMsg(MSG.GET_PREFERENCES);
   const prev = prevResp.success && prevResp.data ? prevResp.data : {};
+  const fillMode = document.getElementById("pref-fill-mode")?.value || "fast";
+  const smartFillEnabled = document.getElementById("pref-smart-fill-enabled")?.checked === true;
+  const smartFillConfidenceThreshold = Number(document.getElementById("pref-smart-fill-threshold")?.value || 0.9);
+  const smartFillAllowGeneration = document.getElementById("pref-smart-fill-allow-generation")?.checked === true;
   const prefs = {
     ...prev,
+    fillMode,
+    smartFillEnabled,
+    smartFillConfidenceThreshold: Number.isFinite(smartFillConfidenceThreshold) ? smartFillConfidenceThreshold : 0.9,
+    smartFillAllowGeneration,
     remote: remoteVal,
     hybridOk: true,
     minSalary: document.getElementById("pref-min-salary").value.trim(),
@@ -1129,25 +1374,196 @@ function renderCustomAnswers(savedAnswers) {
 
 // ─── History ────────────────────────────────────────────────────
 
+let historyData = [];
+let historyFilter = "all";
+
 async function loadHistory() {
   const resp = await sendMsg(MSG.GET_HISTORY);
+  if (resp.success && resp.data) {
+    historyData = resp.data;
+  }
+  renderHistory();
+
+  // Bind filter buttons
+  document.querySelectorAll(".filter-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".filter-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      historyFilter = btn.dataset.filter || "all";
+      renderHistory();
+    });
+  });
+}
+
+function renderHistory() {
   const container = document.getElementById("history-list");
-  if (!resp.success || !resp.data || resp.data.length === 0) {
-    container.innerHTML = '<p class="empty-state">No history yet. Start analyzing job postings!</p>';
+  if (!container) return;
+
+  let filtered = historyData;
+  if (historyFilter !== "all") {
+    filtered = historyData.filter((h) => (h.status || h.action) === historyFilter);
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<p class="empty-state">${historyData.length === 0 ? "No history yet. Start analyzing job postings!" : `No entries with status "${historyFilter}".`}</p>`;
     return;
   }
-  container.innerHTML = resp.data.slice(0, 50).map((entry) => {
+
+  container.innerHTML = filtered.slice(0, 100).map((entry) => {
+    const status = entry.status || entry.action || "analyzed";
     const scoreClass = entry.matchScore >= 70 ? "high" : entry.matchScore >= 40 ? "medium" : "low";
+    const statusInfo = APPLICATION_STATUSES.find((s) => s.value === status) || APPLICATION_STATUSES[0];
+    const safeHref = safeExternalHref(entry.url);
+    const jobUrl = safeHref ? `<a href="${escAttr(safeHref)}" target="_blank" rel="noopener noreferrer" class="history-link" title="Open job posting">&#128279;</a>` : "";
+
+    const statusOptions = APPLICATION_STATUSES.map((s) =>
+      `<option value="${escAttr(s.value)}" ${s.value === status ? "selected" : ""}>${escHtml(s.label)}</option>`
+    ).join("");
+
+    const jobIdPart = entry.jobId
+      ? `<span class="history-job-id">ID ${escHtml(entry.jobId)}</span> · `
+      : "";
+
     return `
-    <div class="history-row">
-      <div class="history-score ${scoreClass}">${entry.matchScore}%</div>
+    <div class="history-row" data-id="${escAttr(entry.id || "")}">
+      <div class="history-score ${scoreClass}">${entry.matchScore || 0}%</div>
       <div class="history-info">
-        <div class="history-title">${escHtml(entry.jobTitle || "Unknown")}</div>
-        <div class="history-sub">${escHtml(entry.company || entry.domain || "")} &middot; ${formatDate(entry.timestamp)}</div>
+        <div class="history-title">${escHtml(entry.jobTitle || "Unknown")} ${jobUrl}</div>
+        <div class="history-sub">${jobIdPart}${escHtml(entry.company || entry.domain || "")} &middot; ${formatDate(entry.timestamp)}</div>
       </div>
-      <span class="history-action ${entry.action}">${escHtml(entry.action)}</span>
+      <select class="history-status-select input-sm" data-id="${escAttr(entry.id || "")}" style="background:${statusInfo.color};border:none;border-radius:4px;padding:2px 6px;font-size:12px;cursor:pointer">
+        ${statusOptions}
+      </select>
     </div>`;
   }).join("");
+
+  // Bind status change
+  container.querySelectorAll(".history-status-select").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const id = sel.dataset.id;
+      const newStatus = sel.value;
+      if (!id) return;
+      await sendMsg(MSG.UPDATE_HISTORY_STATUS, { id, status: newStatus });
+      // Update local data
+      const entry = historyData.find((h) => h.id === id);
+      if (entry) entry.status = newStatus;
+      // Update background color
+      const statusInfo = APPLICATION_STATUSES.find((s) => s.value === newStatus);
+      if (statusInfo) sel.style.background = statusInfo.color;
+    });
+  });
+}
+
+// ─── Skills Intelligence ─────────────────────────────────────────
+
+async function loadSkillGaps() {
+  const resp = await sendMsg(MSG.GET_SKILL_GAPS);
+  const container = document.getElementById("skill-gaps-container");
+  if (!container) return;
+
+  if (!resp.success || !resp.data || resp.data.length === 0) {
+    container.innerHTML = '<p class="empty-state">No skill gap data yet. Analyze more job postings (with AI) to build your intelligence report. Data appears for jobs where you scored ≥75% but still had missing skills.</p>';
+    return;
+  }
+
+  const { SKILL_GAP_MIN_JOBS } = await import("../shared/constants.js");
+  const gaps = resp.data.sort((a, b) => b.count - a.count);
+  const significant = gaps.filter((g) => g.count >= SKILL_GAP_MIN_JOBS);
+  const emerging = gaps.filter((g) => g.count < SKILL_GAP_MIN_JOBS && g.count >= 2);
+
+  let html = "";
+
+  if (significant.length > 0) {
+    html += `<h3 style="font-size:15px;font-weight:600;margin-bottom:12px">&#128313; High Priority Skills (appear in ${SKILL_GAP_MIN_JOBS}+ jobs)</h3>`;
+    html += `<div class="skill-gaps-grid">`;
+    html += significant.map((g) => renderSkillGapCard(g, "high")).join("");
+    html += `</div>`;
+  }
+
+  if (emerging.length > 0) {
+    html += `<h3 style="font-size:15px;font-weight:600;margin:20px 0 12px">&#128314; Emerging Skills (seen in 2-${SKILL_GAP_MIN_JOBS - 1} jobs)</h3>`;
+    html += `<div class="skill-gaps-grid">`;
+    html += emerging.map((g) => renderSkillGapCard(g, "medium")).join("");
+    html += `</div>`;
+  }
+
+  if (gaps.length === 0) {
+    html = '<p class="empty-state">No patterns detected yet. Keep analyzing jobs!</p>';
+  }
+
+  container.innerHTML = html;
+}
+
+function renderSkillGapCard(gap, priority) {
+  const borderColor = priority === "high" ? "#f59e0b" : "#a78bfa";
+  const jobs = (gap.relatedJobs || []).slice(0, 3);
+  const jobsHtml = jobs.map((j) => `<li>${escHtml(j.jobTitle || "")} @ ${escHtml(j.company || "")} (${j.matchScore}%)</li>`).join("");
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(gap.skill + " course tutorial")}`;
+
+  return `
+    <div class="skill-gap-card" style="border-left:3px solid ${borderColor}">
+      <div class="skill-gap-header">
+        <strong>${escHtml(gap.skill)}</strong>
+        <span class="skill-gap-count">Seen in ${gap.count} job${gap.count !== 1 ? "s" : ""}</span>
+      </div>
+      ${jobsHtml ? `<ul class="skill-gap-jobs">${jobsHtml}</ul>` : ""}
+      <div class="skill-gap-actions">
+        <a href="${searchUrl}" target="_blank" class="btn btn-sm btn-secondary" style="font-size:11px">Learn ${escHtml(gap.skill)}</a>
+      </div>
+    </div>
+  `;
+}
+
+// ─── Find Jobs ───────────────────────────────────────────────────
+
+async function checkFindJobsReady() {
+  const resp = await sendMsg(MSG.GET_API_CONFIG);
+  const hasPerplexity = resp.success && resp.data?.perplexityKey;
+  const noKeyEl = document.getElementById("find-jobs-no-key");
+  const uiEl = document.getElementById("find-jobs-ui");
+  if (noKeyEl) noKeyEl.style.display = hasPerplexity ? "none" : "block";
+  if (uiEl) uiEl.style.display = hasPerplexity ? "block" : "none";
+}
+
+async function findJobsHandler() {
+  const btn = document.getElementById("btn-find-jobs");
+  const resultsEl = document.getElementById("find-jobs-results");
+  if (!btn || !resultsEl) return;
+
+  btn.disabled = true;
+  btn.textContent = "Searching...";
+  resultsEl.innerHTML = `<div class="parse-progress" style="display:flex"><div class="spinner-sm"></div><span style="margin-left:8px">Finding jobs with Perplexity real-time search...</span></div>`;
+
+  const resp = await sendMsg(MSG.FIND_JOBS, {});
+  btn.disabled = false;
+  btn.textContent = FIND_JOBS_BTN_LABEL;
+
+  if (!resp.success) {
+    showStatus("find-jobs-status", resp.error || "Search failed", "error");
+    resultsEl.innerHTML = "";
+    return;
+  }
+
+  const jobs = resp.data;
+  if (!Array.isArray(jobs) || jobs.length === 0) {
+    resultsEl.innerHTML = '<p class="empty-state">No results found. Try again or adjust your profile.</p>';
+    return;
+  }
+
+  resultsEl.innerHTML = `<div class="jobs-results-grid">${jobs.map((job) => `
+    <div class="job-result-card">
+      <div class="job-result-header">
+        <strong>${escHtml(job.title || "Unknown Position")}</strong>
+        ${safeExternalHref(job.url) ? `<a href="${escAttr(safeExternalHref(job.url))}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary" style="font-size:11px">View Job</a>` : ""}
+      </div>
+      <div class="job-result-meta">
+        ${escHtml(job.company || "")}${job.location ? ` &middot; ${escHtml(job.location)}` : ""}
+        ${job.postedDate ? ` &middot; ${escHtml(job.postedDate)}` : ""}
+        ${job.salary ? ` &middot; ${escHtml(job.salary)}` : ""}
+      </div>
+      ${job.match ? `<p class="job-result-match">${escHtml(job.match)}</p>` : ""}
+    </div>
+  `).join("")}</div>`;
 }
 
 // ─── Data Management ────────────────────────────────────────────
@@ -1198,7 +1614,86 @@ async function clearAllHandler() {
 function bindEvents() {
   document.getElementById("btn-save-api").addEventListener("click", saveApiConfigHandler);
   document.getElementById("btn-test-key").addEventListener("click", testApiKeyHandler);
+  document.getElementById("btn-test-anthropic")?.addEventListener("click", testAnthropicKeyHandler);
+  document.getElementById("btn-test-perplexity")?.addEventListener("click", testPerplexityKeyHandler);
   document.getElementById("btn-save-resume").addEventListener("click", saveResumeHandler);
+
+  // Security mode (optional)
+  document.getElementById("sec-toggle-passphrase")?.addEventListener("click", () => {
+    const input = document.getElementById("sec-passphrase");
+    if (input) input.type = input.type === "password" ? "text" : "password";
+  });
+  document.getElementById("sec-enable")?.addEventListener("change", onSecurityToggleChange);
+  document.getElementById("sec-btn-enable")?.addEventListener("click", enableSecurityHandler);
+  document.getElementById("sec-btn-unlock")?.addEventListener("click", unlockSecurityHandler);
+  document.getElementById("sec-btn-lock")?.addEventListener("click", lockSecurityHandler);
+  document.getElementById("sec-btn-disable")?.addEventListener("click", disableSecurityHandler);
+
+  // Toggle API key visibility
+  document.getElementById("toggle-anthropic-vis")?.addEventListener("click", () => {
+    const input = document.getElementById("anthropic-key");
+    if (input) input.type = input.type === "password" ? "text" : "password";
+  });
+  document.getElementById("toggle-perplexity-vis")?.addEventListener("click", () => {
+    const input = document.getElementById("perplexity-key");
+    if (input) input.type = input.type === "password" ? "text" : "password";
+  });
+
+  document.getElementById("resume-profile-depth")?.addEventListener("change", async () => {
+    await persistResumeProfileDepth();
+    updateResumeDepthHint();
+  });
+
+  // Prompt generator
+  document.getElementById("btn-copy-ai-prompt")?.addEventListener("click", () => {
+    const resumeText = document.getElementById("resume-text")?.value.trim();
+    if (!resumeText) {
+      showStatus("json-import-status", "Please paste your resume text first.", "error");
+      return;
+    }
+    const depth = document.getElementById("resume-profile-depth")?.value;
+    const prompt = buildProfileGenerationPrompt(resumeText, depth);
+    navigator.clipboard.writeText(prompt).then(() => {
+      const btn = document.getElementById("btn-copy-ai-prompt");
+      if (btn) { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Copy Prompt for ChatGPT/Claude"; }, 3000); }
+    });
+  });
+
+  document.getElementById("btn-import-json-profile")?.addEventListener("click", async () => {
+    const jsonText = document.getElementById("json-import-input")?.value.trim();
+    if (!jsonText) { showStatus("json-import-status", "Please paste the JSON from your AI chat.", "error"); return; }
+    try {
+      const profile = JSON.parse(jsonText);
+      if (typeof profile !== "object" || Array.isArray(profile)) throw new Error("Expected a JSON object");
+      await sendMsg(MSG.SAVE_PROFILE, profile);
+      showStatus("json-import-status", "Profile imported successfully! Check the Profile tab.", "success");
+      await markTabSaved("profile");
+      await loadProfile();
+      showJSONPreview(profile);
+      document.getElementById("json-import-input").value = "";
+    } catch (err) {
+      showStatus("json-import-status", `Invalid JSON: ${err.message}`, "error");
+    }
+  });
+
+  // PDF text extraction
+  document.getElementById("btn-extract-pdf-text")?.addEventListener("click", extractPdfTextToResume);
+
+  // Skills Intelligence
+  document.getElementById("btn-clear-skill-gaps")?.addEventListener("click", async () => {
+    if (!confirm("Clear all skill gap data?")) return;
+    await sendMsg(MSG.CLEAR_SKILL_GAPS);
+    showStatus("skill-gaps-status", "Skill gap data cleared.", "success");
+    await loadSkillGaps();
+  });
+
+  // Find Jobs
+  document.getElementById("btn-find-jobs")?.addEventListener("click", findJobsHandler);
+  document.getElementById("goto-api-from-jobs")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    switchTab("api");
+    history.replaceState(null, "", "#api");
+  });
   document.getElementById("btn-save-profile").addEventListener("click", saveProfileHandler);
   document.getElementById("btn-save-prefs").addEventListener("click", savePrefsHandler);
   document.getElementById("pref-currency")?.addEventListener("change", onPreferenceCurrencyChange);
@@ -1277,6 +1772,114 @@ function bindEvents() {
   });
 }
 
+async function loadSecurityStatus() {
+  const el = document.getElementById("sec-enable");
+  if (!el) return;
+  const resp = await sendMsg(MSG.GET_SECURITY_STATUS);
+  const enabled = resp.success && resp.data?.enabled === true;
+  const locked = resp.success && resp.data?.locked === true;
+  el.checked = enabled;
+  updateSecurityButtons({ enabled, locked });
+  if (enabled) {
+    showStatus("sec-status", locked ? "Security mode enabled — keys are locked. Unlock to use AI." : "Security mode enabled — unlocked for this browser session.", locked ? "error" : "success");
+  } else {
+    const st = document.getElementById("sec-status");
+    if (st) st.style.display = "none";
+  }
+}
+
+function updateSecurityButtons(state) {
+  const enabled = state?.enabled === true;
+  const locked = state?.locked === true;
+  const btnEnable = document.getElementById("sec-btn-enable");
+  const btnUnlock = document.getElementById("sec-btn-unlock");
+  const btnLock = document.getElementById("sec-btn-lock");
+  const btnDisable = document.getElementById("sec-btn-disable");
+  if (btnEnable) btnEnable.disabled = enabled;
+  if (btnUnlock) btnUnlock.disabled = !enabled || !locked;
+  if (btnLock) btnLock.disabled = !enabled || locked;
+  if (btnDisable) btnDisable.disabled = !enabled;
+}
+
+function getSecurityPassphrase() {
+  return String(document.getElementById("sec-passphrase")?.value || "");
+}
+
+async function onSecurityToggleChange() {
+  const cb = document.getElementById("sec-enable");
+  if (!cb) return;
+  const resp = await sendMsg(MSG.GET_SECURITY_STATUS);
+  const currentlyEnabled = resp.success && resp.data?.enabled === true;
+  const desired = cb.checked === true;
+  if (desired === currentlyEnabled) return;
+
+  if (desired) {
+    await enableSecurityHandler();
+  } else {
+    await disableSecurityHandler();
+  }
+  await loadSecurityStatus();
+}
+
+async function enableSecurityHandler() {
+  const passphrase = getSecurityPassphrase();
+  if (passphrase.length < 12) {
+    showStatus("sec-status", "Passphrase must be at least 12 characters.", "error");
+    const cb = document.getElementById("sec-enable");
+    if (cb) cb.checked = false;
+    return;
+  }
+  const resp = await sendMsg(MSG.ENABLE_SECURITY_MODE, { passphrase });
+  if (!resp.success) {
+    showStatus("sec-status", resp.error || "Failed to enable security mode.", "error");
+    const cb = document.getElementById("sec-enable");
+    if (cb) cb.checked = false;
+    return;
+  }
+  showStatus("sec-status", "Security mode enabled. Keys are now encrypted at rest.", "success");
+  await loadSecurityStatus();
+}
+
+async function unlockSecurityHandler() {
+  const passphrase = getSecurityPassphrase();
+  if (!passphrase) {
+    showStatus("sec-status", "Enter your passphrase to unlock.", "error");
+    return;
+  }
+  const resp = await sendMsg(MSG.UNLOCK_SECURITY_MODE, { passphrase });
+  if (!resp.success) {
+    showStatus("sec-status", resp.error || "Unlock failed.", "error");
+    return;
+  }
+  showStatus("sec-status", "Unlocked for this browser session.", "success");
+  await loadSecurityStatus();
+}
+
+async function lockSecurityHandler() {
+  const resp = await sendMsg(MSG.LOCK_SECURITY_MODE, {});
+  if (!resp.success) {
+    showStatus("sec-status", resp.error || "Failed to lock.", "error");
+    return;
+  }
+  showStatus("sec-status", "Locked. AI features are disabled until you unlock again.", "success");
+  await loadSecurityStatus();
+}
+
+async function disableSecurityHandler() {
+  const passphrase = getSecurityPassphrase();
+  // If locked, the background will require passphrase to restore keys.
+  const resp = await sendMsg(MSG.DISABLE_SECURITY_MODE, passphrase ? { passphrase } : {});
+  if (!resp.success) {
+    showStatus("sec-status", resp.error || "Failed to disable security mode.", "error");
+    const status = await sendMsg(MSG.GET_SECURITY_STATUS);
+    const cb = document.getElementById("sec-enable");
+    if (cb) cb.checked = status.success && status.data?.enabled === true;
+    return;
+  }
+  showStatus("sec-status", "Security mode disabled. Keys restored to normal storage.", "success");
+  await loadSecurityStatus();
+}
+
 // ─── Helpers ────────────────────────────────────────────────────
 
 async function sendMsg(type, payload = {}) {
@@ -1300,6 +1903,18 @@ function escHtml(text) {
 
 function escAttr(text) {
   return (text || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function safeExternalHref(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    if (u.protocol === "http:" || u.protocol === "https:") return u.toString();
+    return "";
+  } catch {
+    return "";
+  }
 }
 
 function normalizeKey(label) {

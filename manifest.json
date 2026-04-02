@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Job Assistant",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Analyze job postings, match your profile, and get AI-assisted suggestions for applications — all user-triggered.",
 
   "permissions": [
@@ -13,11 +13,17 @@
 
   "host_permissions": [
     "https://api.openai.com/*",
+    "https://api.anthropic.com/*",
+    "https://api.perplexity.ai/*",
     "https://api.frankfurter.app/*"
   ],
 
   "background": {
     "service_worker": "background/service-worker.js"
+  },
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'self';"
   },
 
 
@@ -38,5 +44,12 @@
     "32": "assets/icons/icon-32.png",
     "48": "assets/icons/icon-48.png",
     "128": "assets/icons/icon-128.png"
-  }
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["pdf.worker.min.mjs"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
