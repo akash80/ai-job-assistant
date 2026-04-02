@@ -84,5 +84,15 @@ describe("shared/prompts", () => {
     expect(user).toContain("id:email");
     expect(user).toContain("---SAVED PROFILE---");
   });
+
+  test("buildTailorResumeSystem and buildTailorResumePrompt include required schema cues", async () => {
+    const { buildTailorResumeSystem, buildTailorResumePrompt } = await import("../src/shared/prompts.js");
+    const sys = buildTailorResumeSystem();
+    expect(sys).toContain("Return ONLY valid JSON");
+    const user = buildTailorResumePrompt({ schemaVersion: 1, job: { jobText: "X" } });
+    expect(user).toContain("---REQUEST JSON---");
+    expect(user).toContain("\"schemaVersion\": 1");
+    expect(user).toContain("\"experience\"");
+  });
 });
 

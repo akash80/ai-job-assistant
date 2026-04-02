@@ -1,6 +1,7 @@
 node_modules/
 requirements/
 dist/
+coverage/
 *.zip
 .env
 .DS_Store

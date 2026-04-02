@@ -24,6 +24,10 @@ let smartFillLastProgressAt = 0;
 let smartFillProgressTimer = null;
 let smartFillElapsedTimer = null;
 let smartFillStartedAt = 0;
+let cachedExperimentalPrefs = null;
+let tailoredPdfActiveRequestId = null;
+let tailoredPdfStartedAt = 0;
+let tailoredPdfElapsedTimer = null;
 
 const LAUNCHER_SHADOW_STYLES = `
   :host { all: initial; }
@@ -149,6 +153,51 @@ function ensureSmartFillProgressListener() {
   }
 }
 
+let tailoredPdfListenerAttached = false;
+function ensureTailoredPdfProgressListener() {
+  if (tailoredPdfListenerAttached) return;
+  tailoredPdfListenerAttached = true;
+  try {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (!message || typeof message !== "object") return;
+      if (message.type !== MSG.TAILORED_RESUME_PDF_PROGRESS) return;
+      const payload = message.payload || {};
+      setTailoredPdfProgress(payload);
+    });
+  } catch {
+    // ignore
+  }
+}
+
+function stopTailoredPdfElapsed() {
+  if (tailoredPdfElapsedTimer) clearInterval(tailoredPdfElapsedTimer);
+  tailoredPdfElapsedTimer = null;
+}
+
+function startTailoredPdfElapsed(requestId) {
+  tailoredPdfActiveRequestId = requestId;
+  tailoredPdfStartedAt = Date.now();
+  stopTailoredPdfElapsed();
+  tailoredPdfElapsedTimer = setInterval(() => {
+    const el = shadowRoot?.querySelector("[data-ja-pdf-elapsed]");
+    if (!el) return;
+    const secs = Math.max(0, Math.round((Date.now() - tailoredPdfStartedAt) / 1000));
+    el.textContent = secs ? `${secs}s` : "";
+  }, 500);
+}
+
+function setTailoredPdfStatus(text) {
+  const el = shadowRoot?.querySelector("[data-ja-pdf-status]");
+  if (el) el.textContent = String(text || "");
+}
+
+function setTailoredPdfProgress({ requestId, step, detail }) {
+  if (!requestId || requestId !== tailoredPdfActiveRequestId) return;
+  const parts = [step, detail].filter(Boolean);
+  if (parts.length) setTailoredPdfStatus(parts.join(" — "));
+  if (step === "Done" || step === "Failed") stopTailoredPdfElapsed();
+}
+
 export function showResult(result, options = {}) {
   const { preserveBaseline = false, jobText = "", jobTextTruncated = false } = options;
   currentResult = result;
@@ -162,6 +211,7 @@ export function showResult(result, options = {}) {
     };
   }
   ensureOverlay();
+  ensureTailoredPdfProgressListener();
   const content = shadowRoot.querySelector(".ja-content");
   const scoreClass = result.match_score >= 70 ? "high" : result.match_score >= 40 ? "medium" : "low";
 
@@ -182,6 +232,8 @@ export function showResult(result, options = {}) {
   // Growth opportunities section (score ≥75 with remaining gaps)
   const growthSection = (result.match_score >= 75 && result.missing_skills?.length > 0) ?
     renderGrowthOpportunities(result.missing_skills) : "";
+
+  const tailoredResumeAction = renderTailoredResumeAction();
 
   content.innerHTML = `
     <div class="ja-result">
@@ -216,6 +268,7 @@ export function showResult(result, options = {}) {
       <div class="ja-actions">
         <button class="ja-btn ja-btn-primary ja-btn-apply"></button>
         <button class="ja-btn ja-btn-secondary ja-btn-cover">Cover Letter</button>
+        ${tailoredResumeAction}
         <button class="ja-btn ja-btn-secondary ja-btn-skip">Skip</button>
       </div>
     </div>
@@ -223,12 +276,156 @@ export function showResult(result, options = {}) {
 
   configurePrimaryActionButton();
   shadowRoot.querySelector(".ja-btn-cover").addEventListener("click", () => showCoverLetterModal());
+  const resumeBtn = shadowRoot.querySelector(".ja-btn-tailored-resume");
+  if (resumeBtn) resumeBtn.addEventListener("click", () => showTailoredResumeModal());
   shadowRoot.querySelector(".ja-btn-skip").addEventListener("click", handleSkip);
 
   setupCollapsibles(shadowRoot);
   setupMissingSkillActions(shadowRoot);
   show();
   animateScore(shadowRoot, result.match_score, scoreClass);
+
+  // Ensure experimental prefs are loaded; if enabled, re-render to show the Tailor Resume action.
+  if (!cachedExperimentalPrefs) {
+    ensureExperimentalPrefsLoaded().then(() => {
+      if (currentResult) showResult(currentResult, { preserveBaseline: true });
+    }).catch(() => {});
+  }
+}
+
+function renderTailoredResumeAction() {
+  const enabled = cachedExperimentalPrefs?.resumeGeneratorEnabled === true;
+  if (!enabled) return "";
+  return `<button class="ja-btn ja-btn-secondary ja-btn-tailored-resume">Tailor Resume</button>`;
+}
+
+async function ensureExperimentalPrefsLoaded() {
+  if (cachedExperimentalPrefs) return cachedExperimentalPrefs;
+  const resp = await sendMessage(MSG.GET_PREFERENCES);
+  const p = resp?.success && resp.data ? resp.data : {};
+  const exp = p.experimentalFeatures && typeof p.experimentalFeatures === "object" ? p.experimentalFeatures : {};
+  cachedExperimentalPrefs = {
+    resumeGeneratorEnabled: exp.resumeGeneratorEnabled === true,
+  };
+  return cachedExperimentalPrefs;
+}
+
+async function showTailoredResumeModal() {
+  await ensureExperimentalPrefsLoaded();
+  const exp = cachedExperimentalPrefs || {};
+  if (exp.resumeGeneratorEnabled !== true) {
+    showFillStatus("Enable Tailored Resume Generator in Settings → Experimental Features.", true);
+    return;
+  }
+  if (!currentResult) return;
+
+  const jobText = sessionJobContext.jobText || "";
+  if (!jobText.trim()) {
+    showFillStatus("Missing job text. Please analyze the job again.", true);
+    return;
+  }
+
+  ensureOverlay();
+  ensureTailoredPdfProgressListener();
+  const content = shadowRoot.querySelector(".ja-content");
+  content.innerHTML = `
+    <div class="ja-modal">
+      <div class="ja-modal-header">
+        <h3 class="ja-modal-title">Tailored Resume (Experimental)</h3>
+        <button class="ja-btn ja-btn-secondary ja-btn-back">${currentResult ? "Back to Analysis" : "Close"}</button>
+      </div>
+      <div class="ja-loading" style="margin-top:10px">
+        <div class="ja-spinner"></div>
+        <p class="ja-loading-text">Generating tailored resume JSON…</p>
+      </div>
+    </div>
+  `;
+  content.querySelector(".ja-btn-back")?.addEventListener("click", () => {
+    if (currentResult) showResult(currentResult);
+  });
+  show();
+
+  const jobPostingKey = currentResult?.jobPostingKey || "";
+  const resp = await sendMessage(MSG.GENERATE_TAILORED_RESUME, {
+    jobTitle: currentResult.job_title,
+    company: currentResult.company,
+    location: currentResult.location,
+    jobUrl: window.location.href,
+    jobPostingKey,
+    jobText,
+  });
+
+  if (!resp?.success) {
+    const friendly = (resp?.code === "NO_API_KEY" || resp?.code === "NO_PROVIDER")
+      ? "This experimental feature needs an AI API key. Add OpenAI, Anthropic, Gemini, or Perplexity in Settings → API Configuration."
+      : "";
+    content.innerHTML = `
+      <div class="ja-modal">
+        <div class="ja-modal-header">
+          <h3 class="ja-modal-title">Tailored Resume (Experimental)</h3>
+          <button class="ja-btn ja-btn-secondary ja-btn-back">Back to Analysis</button>
+        </div>
+        <div class="ja-error" style="margin-top:12px">
+          <strong>Failed:</strong> ${escHtml(resp?.error || "Unknown error")}
+          ${friendly ? `<div style="margin-top:6px;color:#475569">${escHtml(friendly)}</div>` : ""}
+        </div>
+      </div>
+    `;
+    content.querySelector(".ja-btn-back")?.addEventListener("click", () => showResult(currentResult));
+    return;
+  }
+
+  const jsonText = JSON.stringify(resp.data, null, 2);
+  content.innerHTML = `
+    <div class="ja-modal">
+      <div class="ja-modal-header">
+        <h3 class="ja-modal-title">Tailored Resume (Experimental)</h3>
+        <button class="ja-btn ja-btn-secondary ja-btn-back">Back to Analysis</button>
+      </div>
+      <p class="ja-modal-desc">Review the generated JSON. You can copy it, and (optionally) export as PDF.</p>
+      <div style="display:flex;align-items:center;gap:10px;margin:10px 0 6px">
+        <div class="ja-spinner" style="width:16px;height:16px;border-width:2px"></div>
+        <div style="font-size:12.5px;color:#475569">
+          <span data-ja-pdf-status>Ready</span>
+          <span style="margin-left:8px;color:#94a3b8" data-ja-pdf-elapsed></span>
+        </div>
+      </div>
+      <div class="ja-actions" style="margin:10px 0 8px">
+        <button class="ja-btn ja-btn-secondary ja-btn-copy-json">Copy JSON</button>
+        <button class="ja-btn ja-btn-secondary ja-btn-download-pdf">Download PDF</button>
+      </div>
+      <pre class="ja-json-preview" style="max-height:340px;overflow:auto;background:#0b1020;color:#e5e7eb;padding:12px;border-radius:10px;font-size:11.5px;line-height:1.35">${escHtml(jsonText)}</pre>
+    </div>
+  `;
+  content.querySelector(".ja-btn-back")?.addEventListener("click", () => showResult(currentResult));
+  content.querySelector(".ja-btn-copy-json")?.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(jsonText);
+      showFillStatus("Copied tailored resume JSON.", false);
+    } catch {
+      showFillStatus("Copy failed. Select and copy manually.", true);
+    }
+  });
+  content.querySelector(".ja-btn-download-pdf")?.addEventListener("click", () => {
+    const baseName = `${currentResult.company || "company"}-${currentResult.job_title || "resume"}`.toLowerCase();
+    const requestId = generateId();
+    startTailoredPdfElapsed(requestId);
+    setTailoredPdfStatus("Starting export");
+    sendMessage(MSG.GENERATE_TAILORED_RESUME_PDF, {
+      requestId,
+      jobPostingKey: jobPostingKey || "",
+      fileBaseName: baseName,
+    }).then((pdfResp) => {
+      if (!pdfResp?.success) {
+        setTailoredPdfStatus("Failed");
+        stopTailoredPdfElapsed();
+        showFillStatus(pdfResp?.error || "PDF export failed.", true);
+        return;
+      }
+      setTailoredPdfStatus("Preview opened");
+      showFillStatus("Preview opened. Press Ctrl+P → Save as PDF.", true);
+    });
+  });
 }
 
 function configurePrimaryActionButton() {

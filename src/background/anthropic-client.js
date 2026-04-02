@@ -9,8 +9,11 @@ import {
   buildSmartCoverLetterPrompt,
   buildSmartFillSystem,
   buildSmartFillPrompt,
+  buildTailorResumeSystem,
+  buildTailorResumePrompt,
 } from "../shared/prompts.js";
 import { MAX_JOB_TEXT_LENGTH } from "../shared/constants.js";
+import { validateTailoredResume } from "../shared/tailored-resume.js";
 
 const ANTHROPIC_BASE = "https://api.anthropic.com/v1";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -96,6 +99,21 @@ export async function planSmartFormFillAnthropic(input, apiConfig, smartOpts = {
     throw new AnthropicError("Failed to parse Anthropic response as JSON", "PARSE_ERROR");
   }
   return { result: parsed, usage: response.usage };
+}
+
+export async function generateTailoredResumeAnthropic(requestJson, apiConfig) {
+  const response = await callAnthropic(
+    buildTailorResumeSystem(),
+    [{ role: "user", content: buildTailorResumePrompt(requestJson) }],
+    { ...apiConfig, maxTokens: Math.max(2200, Number(apiConfig?.maxTokens || 2000)) },
+  );
+  let parsed;
+  try {
+    parsed = JSON.parse(extractJson(response.content));
+  } catch {
+    throw new AnthropicError("Failed to parse Anthropic tailored resume as JSON", "PARSE_ERROR");
+  }
+  return { result: validateTailoredResume(parsed), usage: response.usage };
 }
 
 async function callAnthropic(systemPrompt, messages, apiConfig) {
@@ -185,17 +203,18 @@ function extractJson(content) {
 }
 
 function validateAnalysisResult(parsed) {
+  const LIST_CAP = 12;
   return {
     match_score: clamp(Number(parsed.match_score) || 0, 0, 100),
-    strengths: ensureArray(parsed.strengths).slice(0, 5),
-    missing_skills: ensureArray(parsed.missing_skills).slice(0, 5),
+    strengths: ensureArray(parsed.strengths).slice(0, LIST_CAP),
+    missing_skills: ensureArray(parsed.missing_skills).slice(0, LIST_CAP),
     recommendation: ["Apply", "Skip", "Consider"].includes(parsed.recommendation)
       ? parsed.recommendation
       : "Consider",
     reason: String(parsed.reason || "No explanation provided."),
     job_title: String(parsed.job_title || "Unknown Title"),
     company: String(parsed.company || "Unknown Company"),
-    key_requirements: ensureArray(parsed.key_requirements).slice(0, 5),
+    key_requirements: ensureArray(parsed.key_requirements).slice(0, LIST_CAP),
     experience_match: String(parsed.experience_match || ""),
     salary_range: parsed.salary_range || null,
     location: String(parsed.location || "Not specified"),

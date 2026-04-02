@@ -122,13 +122,13 @@ export function analyzeJobLocally(jobText, profile) {
   // Build strengths from matched high-value keywords
   const strengths = matched
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
+    .slice(0, 12)
     .map(({ keyword }) => `${capitalize(keyword)} — found in your profile`);
 
   // Build missing from top unmatched keywords
   const missingSkills = missing
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
+    .slice(0, 12)
     .map(({ keyword }) => capitalize(keyword));
 
   // Derive recommendation
@@ -153,7 +153,7 @@ export function analyzeJobLocally(jobText, profile) {
     reason,
     job_title,
     company,
-    key_requirements: jobKeywords.slice(0, 5).map(([kw]) => capitalize(kw)),
+    key_requirements: jobKeywords.slice(0, 12).map(([kw]) => capitalize(kw)),
     experience_match: `Keyword-based match: ${matchScore}% of detected skills found in profile`,
     salary_range,
     location,

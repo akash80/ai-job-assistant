@@ -82,6 +82,7 @@ async function init() {
   await loadResume();
   await loadProfile();
   await loadPreferences();
+  await loadExperimentalFeatures();
   await loadAnswers();
   await loadHistory();
   await loadSkillGaps();
@@ -474,11 +475,6 @@ async function extractPdfTextToResume() {
     showStatus("resume-status", "No PDF uploaded. Please upload a PDF first.", "error");
     return;
   }
-  const btn = document.getElementById("btn-extract-pdf-text");
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "Extracting…";
-  }
   showStatus("resume-status", "Reading PDF…", "success");
   try {
     const pdfjs = await import("pdfjs-dist/build/pdf.min.mjs");
@@ -511,10 +507,6 @@ async function extractPdfTextToResume() {
     console.error(e);
     showStatus("resume-status", e.message || "PDF extraction failed.", "error");
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = "Extract text from PDF";
-    }
   }
 }
 
@@ -582,7 +574,7 @@ function handlePdfFile(file) {
 
     const existingText = document.getElementById("resume-text")?.value?.trim() || "";
     if (existingText) {
-      showStatus("resume-status", "PDF uploaded. Resume text already has content, so it was not overwritten. Use “Extract Text from PDF” if you want to replace it.", "success");
+      showStatus("resume-status", "PDF uploaded. Resume text already has content, so it was not overwritten.", "success");
       return;
     }
 
@@ -599,8 +591,6 @@ function showPdfInfo(name, size) {
   document.getElementById("pdf-upload-info").style.display = "flex";
   document.getElementById("pdf-file-name").textContent = name;
   document.getElementById("pdf-file-size").textContent = formatFileSize(size);
-  const exBtn = document.getElementById("btn-extract-pdf-text");
-  if (exBtn) exBtn.style.display = "inline-flex";
 }
 
 function showPdfPlaceholder() {
@@ -608,8 +598,6 @@ function showPdfPlaceholder() {
   document.getElementById("pdf-upload-info").style.display = "none";
   const pdfInput = document.getElementById("resume-pdf-input");
   if (pdfInput) pdfInput.value = "";
-  const exBtn = document.getElementById("btn-extract-pdf-text");
-  if (exBtn) exBtn.style.display = "none";
 }
 
 function formatFileSize(bytes) {
@@ -1307,6 +1295,31 @@ async function loadPreferences() {
   }
 }
 
+async function loadExperimentalFeatures() {
+  const resp = await sendMsg(MSG.GET_PREFERENCES);
+  const p = resp.success && resp.data ? resp.data : {};
+  const exp = p.experimentalFeatures && typeof p.experimentalFeatures === "object" ? p.experimentalFeatures : {};
+  const resumeGenEl = document.getElementById("exp-resume-generator-enabled");
+  if (resumeGenEl) resumeGenEl.checked = exp.resumeGeneratorEnabled === true;
+}
+
+async function saveExperimentalHandler() {
+  const prevResp = await sendMsg(MSG.GET_PREFERENCES);
+  const prev = prevResp.success && prevResp.data ? prevResp.data : {};
+  const prevExp = prev.experimentalFeatures && typeof prev.experimentalFeatures === "object" ? prev.experimentalFeatures : {};
+  const resumeGeneratorEnabled = document.getElementById("exp-resume-generator-enabled")?.checked === true;
+
+  const next = {
+    ...prev,
+    experimentalFeatures: {
+      ...prevExp,
+      resumeGeneratorEnabled,
+    },
+  };
+  await sendMsg(MSG.SAVE_PREFERENCES, next);
+  showStatus("experimental-status", "Experimental settings saved!", "success");
+}
+
 async function savePrefsHandler() {
   const remoteRadio = document.querySelector('input[name="remote"]:checked');
   const remoteVal = remoteRadio?.value === "true" ? true : remoteRadio?.value === "false" ? false : null;
@@ -1707,6 +1720,7 @@ function bindEvents() {
   document.getElementById("btn-test-perplexity")?.addEventListener("click", testPerplexityKeyHandler);
   document.getElementById("btn-test-gemini")?.addEventListener("click", testGeminiKeyHandler);
   document.getElementById("btn-save-resume").addEventListener("click", saveResumeHandler);
+  document.getElementById("btn-save-experimental")?.addEventListener("click", saveExperimentalHandler);
 
   // Security mode (optional)
   document.getElementById("sec-toggle-passphrase")?.addEventListener("click", () => {
@@ -1769,9 +1783,6 @@ function bindEvents() {
       showStatus("json-import-status", `Invalid JSON: ${err.message}`, "error");
     }
   });
-
-  // PDF text extraction
-  document.getElementById("btn-extract-pdf-text")?.addEventListener("click", extractPdfTextToResume);
 
   // Skills Intelligence
   document.getElementById("btn-clear-skill-gaps")?.addEventListener("click", async () => {

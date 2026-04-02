@@ -9,9 +9,12 @@ import {
   buildSmartCoverLetterPrompt,
   buildSmartFillSystem,
   buildSmartFillPrompt,
+  buildTailorResumeSystem,
+  buildTailorResumePrompt,
   VALIDATION_PROMPT_MESSAGE,
 } from "../shared/prompts.js";
 import { MAX_JOB_TEXT_LENGTH } from "../shared/constants.js";
+import { validateTailoredResume } from "../shared/tailored-resume.js";
 
 export async function analyzeJob(jobText, resumeText, apiConfig) {
   const trimmedJob = jobText.slice(0, MAX_JOB_TEXT_LENGTH);
@@ -89,6 +92,21 @@ export async function planSmartFormFillOpenAI(input, apiConfig, smartOpts = {}) 
   );
   const parsed = JSON.parse(response.content);
   return { result: parsed, usage: response.usage };
+}
+
+export async function generateTailoredResumeOpenAI(requestJson, apiConfig) {
+  const system = buildTailorResumeSystem();
+  const user = buildTailorResumePrompt(requestJson);
+  const response = await callOpenAI(
+    [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    { ...apiConfig, maxTokens: Math.max(1800, Number(apiConfig?.maxTokens || 2000)) },
+    { response_format: { type: "json_object" } },
+  );
+  const parsed = JSON.parse(response.content);
+  return { result: validateTailoredResume(parsed), usage: response.usage };
 }
 
 function modelPrefersMaxCompletionTokens(modelId) {
@@ -224,17 +242,18 @@ async function callOpenAI(messages, apiConfig, extraBody = {}) {
 }
 
 function validateAnalysisResult(parsed) {
+  const LIST_CAP = 12;
   return {
     match_score: clamp(Number(parsed.match_score) || 0, 0, 100),
-    strengths: ensureArray(parsed.strengths).slice(0, 5),
-    missing_skills: ensureArray(parsed.missing_skills).slice(0, 5),
+    strengths: ensureArray(parsed.strengths).slice(0, LIST_CAP),
+    missing_skills: ensureArray(parsed.missing_skills).slice(0, LIST_CAP),
     recommendation: ["Apply", "Skip", "Consider"].includes(parsed.recommendation)
       ? parsed.recommendation
       : "Consider",
     reason: String(parsed.reason || "No explanation provided."),
     job_title: String(parsed.job_title || "Unknown Title"),
     company: String(parsed.company || "Unknown Company"),
-    key_requirements: ensureArray(parsed.key_requirements).slice(0, 5),
+    key_requirements: ensureArray(parsed.key_requirements).slice(0, LIST_CAP),
     experience_match: String(parsed.experience_match || ""),
     salary_range: parsed.salary_range || null,
     location: String(parsed.location || "Not specified"),

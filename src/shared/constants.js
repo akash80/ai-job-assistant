@@ -77,6 +77,17 @@ export const MSG = {
   CLEAR_JOB_SESSION: "CLEAR_JOB_SESSION",
   /** Returns list of recent analyzed job sessions. */
   GET_JOB_SESSIONS: "GET_JOB_SESSIONS",
+
+  /** Experimental: Generate job-specific tailored resume (JSON). */
+  GENERATE_TAILORED_RESUME: "GENERATE_TAILORED_RESUME",
+  /** Experimental: Generate PDF for a tailored resume. */
+  GENERATE_TAILORED_RESUME_PDF: "GENERATE_TAILORED_RESUME_PDF",
+
+  /**
+   * Background → content progress event while exporting tailored resume PDF.
+   * Payload: { requestId: string, step?: string, detail?: string }
+   */
+  TAILORED_RESUME_PDF_PROGRESS: "TAILORED_RESUME_PDF_PROGRESS",
 };
 
 export const STORAGE_KEYS = {
@@ -100,6 +111,8 @@ export const STORAGE_KEYS = {
   JOB_SESSION: "jobSession",
   /** New: recent multi-job sessions keyed by posting key */
   JOB_SESSIONS: "jobSessions",
+  /** Experimental: tailored resumes per job posting key */
+  TAILORED_RESUMES: "tailoredResumes",
 };
 
 export const DEFAULT_API_CONFIG = {

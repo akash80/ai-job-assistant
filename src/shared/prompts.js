@@ -12,13 +12,13 @@ ${resumeText}
 Return a JSON object with this exact structure:
 {
   "match_score": <number 0-100>,
-  "strengths": ["<matching skill/experience, max 5 items>"],
-  "missing_skills": ["<required skill the candidate lacks, max 5 items>"],
+  "strengths": ["<matching skill/experience (0-12 items; include only truly relevant items)>"],
+  "missing_skills": ["<required skill the candidate lacks (0-12 items; include only concrete skills/requirements)>"],
   "recommendation": "Apply" | "Skip" | "Consider",
   "reason": "<1-2 sentence explanation>",
   "job_title": "<extracted job title>",
   "company": "<extracted company name or Unknown>",
-  "key_requirements": ["<top 5 requirements from the posting>"],
+  "key_requirements": ["<key requirements from the posting (0-12 items; prefer concrete requirements over generic phrasing)>"],
   "experience_match": "<how candidate experience aligns, 1 sentence>",
   "salary_range": "<if mentioned, otherwise null>",
   "location": "<job location or Remote>",
@@ -428,6 +428,86 @@ Rules:
 - Only include real, verifiable job postings with working URLs
 - Prioritize jobs from LinkedIn, Indeed, company career pages
 - Return ONLY the JSON array, no extra text`;
+}
+
+// ─── Tailored Resume (Experimental) ───────────────────────────────
+
+export function buildTailorResumeSystem() {
+  return `You are an expert résumé writer and ATS optimizer.
+
+You will receive a JSON request that includes:
+- Candidate profile JSON (source of truth)
+- Candidate raw resume text (secondary source; may contain extra details)
+- Job posting text + job meta
+
+Return ONLY valid JSON (no markdown, no code fences, no extra text).
+Do not invent facts. If a detail is not supported by the inputs, omit it or add a warning in meta.warnings.
+
+Output MUST follow the TailoredResume schema described in the user message.`;
+}
+
+export function buildTailorResumePrompt(requestJson) {
+  return `Generate a job-specific tailored resume as JSON.
+
+---REQUEST JSON---
+${JSON.stringify(requestJson, null, 2)}
+---END REQUEST JSON---
+
+Return a JSON object with this exact structure (keys required unless marked optional):
+{
+  "schemaVersion": 1,
+  "meta": {
+    "generatedAt": "<ISO timestamp>",
+    "jobPostingKey": "<optional stable key if provided>",
+    "model": "<model id string if known, else empty string>",
+    "warnings": ["<strings; include any uncertainty or omissions>"]
+  },
+  "basics": {
+    "name": "<full name>",
+    "email": "<email or empty>",
+    "phone": "<phone or empty>",
+    "location": "<location or empty>",
+    "links": {
+      "linkedin": "<optional>",
+      "github": "<optional>",
+      "portfolio": "<optional>",
+      "website": "<optional>"
+    }
+  },
+  "headline": "<1 line, role-aligned>",
+  "summaryBullets": ["<3-6 bullets, impact-focused, truthful>"],
+  "skills": {
+    "categories": {
+      "<Category>": ["Skill1", "Skill2"]
+    },
+    "topKeywords": ["<ATS keywords relevant to the job, drawn from posting + candidate truth>"]
+  },
+  "experience": [
+    {
+      "title": "",
+      "company": "",
+      "location": "",
+      "startDate": "",
+      "endDate": "",
+      "bullets": ["<4-8 bullets, quantified when supported>"]
+    }
+  ],
+  "projects": [],
+  "education": [],
+  "certifications": [],
+  "additionalSections": {},
+  "atsKeywords": ["<up to 40>"]
+}
+
+Rules:
+- Keep content concise and ATS-friendly.
+- Prefer the candidate's existing experience; reorder and rewrite bullets to match the job.
+- If job requires something the candidate does not have, do NOT claim it. Add a warning in meta.warnings instead.
+- Ensure JSON is strictly valid.`;
+}
+
+export function friendlyTailorResumeProviderHint() {
+  return "To use this experimental feature, add an AI API key in Settings → API Configuration (OpenAI, Anthropic, Gemini, or Perplexity).";
 }
 
 // ─── ChatGPT / Claude profile JSON prompt (no API key path) ───

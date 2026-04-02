@@ -37,5 +37,10 @@ describe("background/ai-router", () => {
     const router = await import("../src/background/ai-router.js");
     await expect(router.routeFindJobs({}, {}, { apiKey: "x" })).rejects.toMatchObject({ code: "NO_PERPLEXITY" });
   });
+
+  test("routeGenerateTailoredResume requires OpenAI for now", async () => {
+    const router = await import("../src/background/ai-router.js");
+    await expect(router.routeGenerateTailoredResume({ schemaVersion: 1 }, { })).rejects.toMatchObject({ code: "NO_PROVIDER" });
+  });
 });
 

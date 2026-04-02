@@ -8,6 +8,7 @@ module.exports = {
     "content/content": "./src/content/content.js",
     "popup/popup": "./src/popup/popup.js",
     "options/options": "./src/options/options.js",
+    "resume-pdf/preview": "./src/resume-pdf/preview.js",
   },
 
   output: {
@@ -38,6 +39,7 @@ module.exports = {
         { from: "src/options/options.html", to: "options/options.html" },
         { from: "src/options/options.css", to: "options/options.css" },
         { from: "src/content/content.css", to: "content/content.css" },
+        { from: "src/resume-pdf/preview.html", to: "resume-pdf/preview.html" },
         { from: "assets/", to: "assets/" },
         {
           from: "node_modules/pdfjs-dist/build/pdf.worker.min.mjs",

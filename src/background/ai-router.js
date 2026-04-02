@@ -14,13 +14,14 @@
  * - If both → smart routing per task
  */
 
-import { analyzeJob, parseResume, testApiKey, planSmartFormFillOpenAI } from "./openai-client.js";
+import { analyzeJob, parseResume, testApiKey, planSmartFormFillOpenAI, generateTailoredResumeOpenAI } from "./openai-client.js";
 import {
   analyzeJobPerplexity,
   parseResumePerplexity,
   generateCoverLetterPerplexity,
   findJobsPerplexity,
   planSmartFormFillPerplexity,
+  generateTailoredResumePerplexity,
   testPerplexityKey,
 } from "./perplexity-client.js";
 import {
@@ -28,6 +29,7 @@ import {
   parseResumeAnthropic,
   generateCoverLetterAnthropic,
   planSmartFormFillAnthropic,
+  generateTailoredResumeAnthropic,
   testAnthropicKey,
 } from "./anthropic-client.js";
 import {
@@ -35,6 +37,7 @@ import {
   parseResumeGemini,
   generateCoverLetterGemini,
   planSmartFormFillGemini,
+  generateTailoredResumeGemini,
   testGeminiKey,
 } from "./gemini-client.js";
 import { generateCoverLetterOpenAI } from "./openai-client.js";
@@ -208,6 +211,27 @@ export async function routeSmartFormFill(input, apiConfig, smartOpts = {}) {
     return planSmartFormFillPerplexity(input, apiConfig, smartOpts);
   }
 
+  throw new RouterError("No AI provider configured. Please add an API key in Settings.", "NO_PROVIDER");
+}
+
+/**
+ * Route tailored resume generation (experimental).
+ * For v1 we require OpenAI because it reliably supports strict JSON mode here.
+ */
+export async function routeGenerateTailoredResume(requestJson, apiConfig) {
+  const providers = getAvailableProviders(apiConfig);
+  if (providers.openai) {
+    return generateTailoredResumeOpenAI(requestJson, apiConfig);
+  }
+  if (providers.anthropic) {
+    return generateTailoredResumeAnthropic(requestJson, apiConfig);
+  }
+  if (providers.gemini) {
+    return generateTailoredResumeGemini(requestJson, apiConfig);
+  }
+  if (providers.perplexity) {
+    return generateTailoredResumePerplexity(requestJson, apiConfig);
+  }
   throw new RouterError("No AI provider configured. Please add an API key in Settings.", "NO_PROVIDER");
 }
 

@@ -103,6 +103,10 @@ const DEFAULT_PREFERENCES = {
   smartFillConfidenceThreshold: 0.9,
   /** Allow short AI-written answers for free-text fields. */
   smartFillAllowGeneration: true,
+  experimentalFeatures: {
+    /** Experimental: Generate a job-specific tailored resume (JSON in/out). */
+    resumeGeneratorEnabled: false,
+  },
 };
 
 export async function getPreferences() {
@@ -113,6 +117,28 @@ export async function getPreferences() {
 
 export async function savePreferences(prefs) {
   await saveToStorage(STORAGE_KEYS.PREFERENCES, prefs);
+}
+
+export async function getTailoredResumes() {
+  return (await getFromStorage(STORAGE_KEYS.TAILORED_RESUMES)) || {};
+}
+
+export async function saveTailoredResume(jobPostingKey, tailoredResume) {
+  const key = String(jobPostingKey || "").trim();
+  if (!key) return;
+  const all = await getTailoredResumes();
+  all[key] = {
+    tailoredResume,
+    savedAt: new Date().toISOString(),
+  };
+  await saveToStorage(STORAGE_KEYS.TAILORED_RESUMES, all);
+}
+
+export async function getTailoredResume(jobPostingKey) {
+  const key = String(jobPostingKey || "").trim();
+  if (!key) return null;
+  const all = await getTailoredResumes();
+  return all[key] || null;
 }
 
 export async function getApiConfig() {

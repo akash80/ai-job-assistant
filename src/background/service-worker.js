@@ -17,6 +17,7 @@ import {
   routeGenerateCoverLetter,
   routeFindJobs,
   routeSmartFormFill,
+  routeGenerateTailoredResume,
   hasAnyProvider,
   getAnalysisModelId,
   getParseResumeModelId,
@@ -52,6 +53,7 @@ import {
   deleteAnswer,
   getPreferences,
   savePreferences,
+  saveTailoredResume,
   getFindJobsCache,
   saveFindJobsCache,
   getHistory,
@@ -275,6 +277,12 @@ async function handleMessage(message, sender) {
       case MSG.GENERATE_COVER_LETTER:
         return await handleGenerateCoverLetter(payload);
 
+      case MSG.GENERATE_TAILORED_RESUME:
+        return await handleGenerateTailoredResume(payload);
+
+      case MSG.GENERATE_TAILORED_RESUME_PDF:
+        return await handleGenerateTailoredResumePdf(payload, sender);
+
       case MSG.SMART_FILL_PLAN:
         return await handleSmartFillPlan(payload, sender);
 
@@ -312,6 +320,106 @@ async function handleMessage(message, sender) {
   }
 }
 
+async function handleGenerateTailoredResume(payload) {
+  const prefs = await getPreferences();
+  const exp = prefs.experimentalFeatures && typeof prefs.experimentalFeatures === "object" ? prefs.experimentalFeatures : {};
+  if (exp.resumeGeneratorEnabled !== true) {
+    return error("Tailored resume generator is disabled. Enable it in Settings → Experimental Features.", "EXPERIMENTAL_DISABLED");
+  }
+
+  const sec = await getSecurityStatus();
+  if (sec.enabled && sec.locked) {
+    return error("API keys are locked. Open Settings → Security to unlock.", "KEYS_LOCKED");
+  }
+
+  const apiConfig = await getApiConfig();
+  if (!hasAnyProvider(apiConfig)) {
+    return error("Tailored resume generation requires an AI API key. Add OpenAI, Anthropic, Gemini, or Perplexity in Settings → API Configuration.", "NO_API_KEY");
+  }
+
+  const profile = await getProfile();
+  const resume = await getResume();
+  const jobText = typeof payload?.jobText === "string" ? payload.jobText : "";
+  if (!jobText.trim()) {
+    return error("Missing job text. Analyze a job first or provide the job posting text.", "NO_JOB_TEXT");
+  }
+  if (!resume?.rawText) {
+    return error("Please add your resume in Settings first.", "NO_RESUME");
+  }
+
+  const requestJson = {
+    schemaVersion: 1,
+    job: {
+      title: String(payload?.jobTitle || ""),
+      company: String(payload?.company || ""),
+      location: String(payload?.location || ""),
+      jobUrl: String(payload?.jobUrl || ""),
+      jobText,
+    },
+    candidate: {
+      profile: profile && typeof profile === "object" ? profile : {},
+      resumeRawText: String(resume.rawText || ""),
+    },
+    constraints: {
+      maxPages: 1,
+      doNotInventFacts: true,
+    },
+    format: {
+      template: "standard",
+      bulletStyle: "impact",
+    },
+  };
+
+  const { result, usage } = await routeGenerateTailoredResume(requestJson, apiConfig);
+  const modelId = getAnalysisModelId(apiConfig);
+  await trackUsage(modelId, usage);
+
+  const postingKey = String(payload?.jobPostingKey || "").trim();
+  if (postingKey) {
+    await saveTailoredResume(postingKey, result);
+  }
+
+  return success(result);
+}
+
+function sendTailoredResumePdfProgress(sender, progressPayload) {
+  try {
+    const tabId = sender?.tab?.id;
+    if (!Number.isFinite(Number(tabId))) return;
+    chrome.tabs.sendMessage(tabId, { type: MSG.TAILORED_RESUME_PDF_PROGRESS, payload: progressPayload });
+  } catch {
+    // ignore
+  }
+}
+
+async function handleGenerateTailoredResumePdf(payload, sender) {
+  const prefs = await getPreferences();
+  const exp = prefs.experimentalFeatures && typeof prefs.experimentalFeatures === "object" ? prefs.experimentalFeatures : {};
+  if (exp.resumeGeneratorEnabled !== true) {
+    return error("Tailored resume generator is disabled. Enable it in Settings → Experimental Features.", "EXPERIMENTAL_DISABLED");
+  }
+
+  const requestId = typeof payload?.requestId === "string" ? payload.requestId : "";
+  const jobPostingKey = String(payload?.jobPostingKey || "").trim();
+  if (!jobPostingKey) {
+    return error("Missing jobPostingKey. Generate the tailored resume first.", "NO_POSTING_KEY");
+  }
+
+  const fileBase = String(payload?.fileBaseName || "tailored-resume").replace(/[^a-z0-9_\-]+/gi, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "tailored-resume";
+
+  const filename = `${fileBase}.pdf`;
+  sendTailoredResumePdfProgress(sender, { requestId, step: "Opening preview", detail: filename });
+  const url = chrome.runtime.getURL(`resume-pdf/preview.html?k=${encodeURIComponent(jobPostingKey)}`);
+  try {
+    await chrome.tabs.create({ url, active: true });
+  } catch (e) {
+    sendTailoredResumePdfProgress(sender, { requestId, step: "Failed", detail: String(e?.message || "Could not open preview") });
+    return error("Could not open PDF preview tab.", "PDF_PREVIEW_FAILED");
+  }
+  sendTailoredResumePdfProgress(sender, { requestId, step: "Ready to print", detail: "Press Ctrl+P → Save as PDF" });
+  return success({ openedPreview: true, filename, url });
+}
+
 async function handleAnalyzeJob(payload) {
   const { jobText, pageUrl, forceLocal = false, jobIds = [] } = payload;
   const apiConfig = await getApiConfig();
@@ -330,7 +438,7 @@ async function handleAnalyzeJob(payload) {
   }
   if (cached) {
     await trackCacheHit();
-    return success({ ...applyProfileSkillOverrides(cached.result, profile), cached: true });
+    return success({ ...applyProfileSkillOverrides(cached.result, profile), cached: true, jobPostingKey: postingKey || null });
   }
 
   // Slower cache key: hash the content (used to dedupe same posting across different URLs).
@@ -340,7 +448,7 @@ async function handleAnalyzeJob(payload) {
   cached = await getCachedAnalysis(contentHash);
   if (cached) {
     await trackCacheHit();
-    return success({ ...applyProfileSkillOverrides(cached.result, profile), cached: true });
+    return success({ ...applyProfileSkillOverrides(cached.result, profile), cached: true, jobPostingKey: postingKey || null });
   }
 
   // No AI providers available OR forceLocal requested → fall back to local analysis
@@ -361,7 +469,7 @@ async function handleAnalyzeJob(payload) {
       tokensUsed: 0,
       jobPostingKey: postingKey || undefined,
     });
-    return success({ ...applyProfileSkillOverrides(localResult, profile), cached: false });
+    return success({ ...applyProfileSkillOverrides(localResult, profile), cached: false, jobPostingKey: postingKey || null });
   }
 
   if (!resume?.rawText) {
@@ -394,7 +502,7 @@ async function handleAnalyzeJob(payload) {
     );
   }
 
-  return success({ ...finalResult, cached: false });
+  return success({ ...finalResult, cached: false, jobPostingKey: postingKey || null });
 }
 
 /**

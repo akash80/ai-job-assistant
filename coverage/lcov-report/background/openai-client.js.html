@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">75.23% </span>
+                <span class="strong">72.07% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>79/105</span>
+                <span class='fraction'>80/111</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">71.42% </span>
+                <span class="strong">70% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>70/98</span>
+                <span class='fraction'>70/100</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">75% </span>
+                <span class="strong">70.58% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>12/16</span>
+                <span class='fraction'>12/17</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">76.28% </span>
+                <span class="strong">72.81% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>74/97</span>
+                <span class='fraction'>75/103</span>
             </div>
         
             
@@ -322,7 +322,29 @@
 <a name='L257'></a><a href='#L257'>257</a>
 <a name='L258'></a><a href='#L258'>258</a>
 <a name='L259'></a><a href='#L259'>259</a>
-<a name='L260'></a><a href='#L260'>260</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -413,6 +435,21 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -549,6 +586,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -592,9 +630,12 @@
   buildSmartCoverLetterPrompt,
   buildSmartFillSystem,
   buildSmartFillPrompt,
+  buildTailorResumeSystem,
+  buildTailorResumePrompt,
   VALIDATION_PROMPT_MESSAGE,
 } from "../shared/prompts.js";
 import { MAX_JOB_TEXT_LENGTH } from "../shared/constants.js";
+import { validateTailoredResume } from "../shared/tailored-resume.js";
 &nbsp;
 export async function analyzeJob(jobText, resumeText, apiConfig) {
   const trimmedJob = jobText.slice(0, MAX_JOB_TEXT_LENGTH);
@@ -672,6 +713,21 @@ export async function planSmartFormFillOpenAI(input, apiConfig, smartOpts = <spa
   );
   const parsed = JSON.parse(response.content);
   return { result: parsed, usage: response.usage };
+}
+&nbsp;
+export async function <span class="fstat-no" title="function not covered" >generateTailoredResumeOpenAI(</span>requestJson, apiConfig) {
+  const system = <span class="cstat-no" title="statement not covered" >buildTailorResumeSystem();</span>
+  const user = <span class="cstat-no" title="statement not covered" >buildTailorResumePrompt(requestJson);</span>
+  const response = <span class="cstat-no" title="statement not covered" >await callOpenAI(</span>
+    [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    { ...apiConfig, maxTokens: Math.max(1800, Number(apiConfig?.maxTokens || 2000)) },
+    { response_format: { type: "json_object" } },
+  );
+  const parsed = <span class="cstat-no" title="statement not covered" >JSON.parse(response.content);</span>
+<span class="cstat-no" title="statement not covered" >  return { result: validateTailoredResume(parsed), usage: response.usage };</span>
 }
 &nbsp;
 function modelPrefersMaxCompletionTokens(modelId) {
@@ -807,17 +863,18 @@ async function callOpenAI(messages, apiConfig, extraBody = {}) {
 }
 &nbsp;
 function validateAnalysisResult(parsed) {
+  const LIST_CAP = 12;
   return {
     match_score: clamp(Number(parsed.match_score) || <span class="branch-1 cbranch-no" title="branch not covered" >0,</span> 0, 100),
-    strengths: ensureArray(parsed.strengths).slice(0, 5),
-    missing_skills: ensureArray(parsed.missing_skills).slice(0, 5),
+    strengths: ensureArray(parsed.strengths).slice(0, LIST_CAP),
+    missing_skills: ensureArray(parsed.missing_skills).slice(0, LIST_CAP),
     recommendation: ["Apply", "Skip", "Consider"].includes(parsed.recommendation)
       ? <span class="branch-0 cbranch-no" title="branch not covered" >parsed.recommendation</span>
       : "Consider",
     reason: String(parsed.reason || "No explanation provided."),
     job_title: String(parsed.job_title || "Unknown Title"),
     company: String(parsed.company || "Unknown Company"),
-    key_requirements: ensureArray(parsed.key_requirements).slice(0, 5),
+    key_requirements: ensureArray(parsed.key_requirements).slice(0, LIST_CAP),
     experience_match: String(parsed.experience_match || ""),
     salary_range: parsed.salary_range || null,
     location: String(parsed.location || "Not specified"),
@@ -847,7 +904,7 @@ class OpenAIError extends Error {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-04-02T13:24:55.341Z
+                at 2026-04-02T15:24:54.358Z
             </div>
         <script src="../prettify.js"></script>
         <script>
